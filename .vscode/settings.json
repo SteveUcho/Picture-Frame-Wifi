@@ -1,0 +1,5 @@
+{
+    "python.useEnvironmentsExtension": true,
+    "ruff.nativeServer": "on",
+    "python-envs.pythonProjects": []
+}
