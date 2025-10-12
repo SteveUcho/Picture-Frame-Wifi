@@ -1,0 +1,35 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "8080:80"
+    volumes:
+      - type: bind
+        source: ${PHOTO_SRC}
+        target: ${PHOTO_DIR}
+        read_only: true
+    depends_on:
+      # db:
+      #   condition: service_healthy # Wait for the database to be healthy
+      - db
+    develop:
+      watch:
+        - action: sync+restart
+          path: .
+          target: /code
+
+  db:
+    image: mysql:8.0
+    env_file: .env
+    ports:
+      - "3306:3306" # Expose MySQL port to host
+    volumes:
+      - db_data:/var/lib/mysql # Persist database data
+    # healthcheck:
+    #   test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+    #   timeout: 20s
+    #   retries: 10
+
+volumes:
+  db_data:

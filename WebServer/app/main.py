@@ -1,15 +1,38 @@
-import uvicorn
-
-from fastapi import FastAPI
-from fastapi.responses import Response
-
-# from fastapi.responses import StreamingResponse
-# import io
-import numpy as np
-from PIL import Image
-
 import os
 import random
+import uvicorn
+import numpy as np
+from typing import Annotated
+
+from PIL import Image
+from pillow_heif import register_heif_opener
+
+from fastapi import Depends, FastAPI, HTTPException, Query
+from pydantic import BaseModel
+from fastapi.responses import Response
+
+from sqlmodel import Field, Session, SQLModel, create_engine, select
+
+register_heif_opener()
+
+photo_dir = os.environ["PHOTO_DIR"]
+sql_url = os.environ["DATABASE_URL"]
+
+engine = create_engine(sql_url)
+
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+class Settings(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    sleepInterval: str
+
 
 app = FastAPI()
 
@@ -48,12 +71,14 @@ palette = [
     (0, 255, 0),  # Green
 ]
 
+
 def rotate_image(image):
     width, height = image.size
     if height > width:
         return image.rotate(90)
     else:
         return image.rotate(180)
+
 
 def resize_and_truncate(image, target_size=(800, 480)):
     """Resize the image to fit the target size and truncate symmetrically"""
@@ -123,7 +148,6 @@ def set_image(file, saturation=0.5):
             f"Image must be ({frameSize['rows']}x{frameSize['cols']}) pixels!"
         )
 
-
     dither = Image.Dither.FLOYDSTEINBERG
 
     # Image size doesn't matter since it's just the palette we're using
@@ -156,14 +180,7 @@ def set_image(file, saturation=0.5):
     newBuff = remap[
         np.array(image, dtype=np.uint8).reshape((frameSize["rows"], frameSize["cols"]))
     ]
-    #     imageString = newBuff.tolist()
-    #     json.dumps(imageString)
-    #     return imageString
 
-    # def show(buf, busy_wait=True):
-    #     region = buf
-
-    # buf = region.flatten()
     buf = newBuff.flatten()
 
     buf = ((buf[::2] << 4) & 0xF0) | (buf[1::2] & 0x0F)
@@ -171,45 +188,112 @@ def set_image(file, saturation=0.5):
     result = buf.astype("uint8").tolist()
     return result
 
+
+def get_sleep_time(session):
+    frameSettings = session.get(Settings, 1)
+    if not frameSettings:
+        raise HTTPException(status_code=404, detail="Frame settings not found")
+
+    hours, minutes, seconds = frameSettings.sleepInterval.split(":")
+    print(int(hours), int(minutes), int(seconds))
+    return [int(hours), int(minutes), int(seconds)]
+
+
+# Define the extensions to search for
+extensions = (".jpg", ".jpeg", ".png", ".heic")
+
+
+def traverse_directory(path):
+    for root, dirs, files in os.walk(path):
+        if len(files):
+            file_name = random.choice(files)
+            if file_name.lower().endswith(extensions):
+                full_file_path = os.path.join(root, file_name)
+                return full_file_path
+        shuffled_list = dirs[:]  # Create a shallow copy
+        random.shuffle(shuffled_list)
+        for dir in shuffled_list:
+            full_dir_path = os.path.join(root, dir)
+            randomFile = traverse_directory(full_dir_path)
+            if len(randomFile):
+                return randomFile
+        return ""
+
+
 def getRandomImage():
-    # Your directory path here
-    directory = "/Users/steveucho/Pictures/Photos Library.photoslibrary/resources/derivatives"
+    """Recursively finds all JPG, JPEG, PNG, and HEIC files using the glob module."""
+    image_path = traverse_directory(photo_dir)
 
-    all_entries = os.listdir(directory)
-    folders = []
+    if not len(image_path):
+        raise FileNotFoundError(
+            "No .jpeg, .jpg, .png, or .heic files found in the directory."
+        )
 
-    for entry in all_entries:
-        full_path = os.path.join(directory, entry)
-        if os.path.isdir(full_path) and len(entry) == 1:
-            folders.append(full_path)
-
-    random_folder = random.choice(folders)
-
-    # Get all JPEG/JPG files (non-recursive)
-    jpeg_files = [
-        f for f in os.listdir(random_folder) if f.lower().endswith((".jpeg", ".jpg"))
-    ]
-
-    if not jpeg_files:
-        raise FileNotFoundError("No .jpeg or .jpg files found in the directory.")
-    
-    # Pick a random one
-    random_file = random.choice(jpeg_files)
-    image_path = os.path.join(random_folder, random_file)
     print(image_path)
     return image_path
 
 
-
 @app.get("/")
-def read_root():
-    random_file = getRandomImage()
+def read_root(session: SessionDep):
+    random_image = getRandomImage()
 
-    buf = set_image(random_file)
+    buf = set_image(random_image)
+    sleepHeader = get_sleep_time(session)
+
+    buf = sleepHeader + buf
+
     # imageString = np.array2string(image, precision=2, separator=', ', suppress_small=True)
     data = bytes(buf)
     # return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream")
     return Response(content=data, media_type="application/octet-stream")
+
+
+@app.get("/getSleep")
+def getSleep(session: SessionDep):
+    frameSettings = get_sleep_time(session)
+    return frameSettings
+
+
+@app.get("/getImage")
+def getImage(session: SessionDep):
+    imagePath = getRandomImage()
+    return imagePath
+
+
+@app.get("/getImageList")
+def getImageList(session: SessionDep):
+    imagePath = getRandomImage()
+    res_list = set_image(imagePath)
+    return res_list
+
+
+@app.post("/initializeDB")
+def initalizeDB(session: SessionDep):
+    SQLModel.metadata.create_all(engine)
+    setting = Settings(sleepInterval="00:00:45")
+    session.add(setting)
+
+    session.commit()
+    return "Done"
+
+
+class SettingInput(BaseModel):
+    sleepInterval: str
+
+
+# requires the form of HH:MM:SS
+@app.post("/setSleep")
+def setDBSleep(settings: SettingInput, session: SessionDep):
+    print(settings)
+    if len(settings.sleepInterval) != 8 or len(settings.sleepInterval.split(":")) != 3:
+        raise HTTPException(status_code=400, detail="Bad input")
+    current_settings = session.get(Settings, 1)
+    if not current_settings:
+        raise HTTPException(status_code=404, detail="Settings not found")
+    current_settings.sleepInterval = settings
+    session.add(current_settings)
+    session.commit()
+    return "Done"
 
 
 if __name__ == "__main__":
