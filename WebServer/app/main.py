@@ -302,11 +302,6 @@ def get_sleep(device_id: DeviceIdType, session: SessionDep):
 
 @app.get("/getImagePath/{orientation}")
 def get_image(orientation: OrientationType, session: SessionDep):
-    directory_path = OsPath(photo_dir)
-    files_only = [item.name for item in directory_path.iterdir()]
-    print(files_only)
-    # print(os.listdir(photo_dir))
-    print(image_candidates)
     image_path = get_random_image_orientation(orientation)
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
