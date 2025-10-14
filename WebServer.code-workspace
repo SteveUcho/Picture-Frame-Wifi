@@ -1,0 +1,40 @@
+{
+	"folders": [
+		{
+			"path": "WebServer"
+		},
+		{
+			"path": "Esp32"
+		}
+	],
+	"settings": {
+		"sqltools.connections": [
+			{
+				"mysqlOptions": {
+					"authProtocol": "default",
+					"enableSsl": "Disabled"
+				},
+				"ssh": "Disabled",
+				"previewLimit": 50,
+				"server": "localhost",
+				"driver": "MySQL",
+				"connectString": "mysql://root:mysecretpassword@localhost:3306/mydb",
+				"name": "localdb"
+			},
+			{
+				"mysqlOptions": {
+					"authProtocol": "default",
+					"enableSsl": "Disabled"
+				},
+				"ssh": "Disabled",
+				"previewLimit": 50,
+				"server": "192.168.86.28",
+				"driver": "MySQL",
+				"name": "nasDB",
+				"database": "mydb",
+				"username": "root",
+				"connectString": "mysql://root:mysecretpassword@192.168.86.28:3306/mydb"
+			}
+		]
+	}
+}

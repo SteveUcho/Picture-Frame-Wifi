@@ -2,16 +2,17 @@ import os
 import random
 import uvicorn
 import numpy as np
-from typing import Annotated
+from pathlib import Path as OsPath
+from typing import Annotated, Literal
 
 from PIL import Image
 from pillow_heif import register_heif_opener
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, HTTPException, Body, Path
+from pydantic import BaseModel, Field
 from fastapi.responses import Response
 
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field as DbField, Session, SQLModel, create_engine
 
 register_heif_opener()
 
@@ -28,13 +29,35 @@ def get_session():
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
+DeviceIdType = Annotated[int, Path(title="The ID of the item to get")]
+OrientationType = Literal["horizontal", "vertical"]
+
+
+class SettingInput(BaseModel):
+    sleepInterval: str | None = Field(
+        default=None,
+        title="sleepInterval in HH:MM:SS",
+        min_length=8,
+        max_length=8,
+        pattern="^\d{2}:\d{2}:\d{2}$",
+    )
+    orientation: OrientationType | None = Field(
+        default=None, title="set current orientation of frame"
+    )
+
 
 class Settings(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
+    id: int | None = DbField(default=None, primary_key=True)
     sleepInterval: str
+    orientation: str = "horizontal"
 
 
 app = FastAPI()
+
+# Define the extensions to search for
+exts = {".jpg", ".jpeg", ".png", ".heic"}
+root = OsPath(photo_dir)
+image_candidates = [p for p in root.rglob("*") if p.suffix.lower() in exts]
 
 frameSize = {
     "rows": 800,
@@ -132,18 +155,16 @@ def palette_blend(saturation, dtype="uint8"):
     return palette
 
 
-def set_image(file, saturation=0.5):
+def get_image_buffer(image, saturation=0.5):
     """Copy an image to the display.
 
     :param image: PIL image to copy, must be 800x480
     :param saturation: Saturation for quantization palette - higher value results in a more saturated image
 
     """
-    image = Image.open(file)
-    image = rotate_image(image)
     image = resize_and_truncate(image)
 
-    if not image.size == (image.width, image.height):
+    if image.size != (image.width, image.height):
         raise ValueError(
             f"Image must be ({frameSize['rows']}x{frameSize['cols']}) pixels!"
         )
@@ -177,11 +198,11 @@ def set_image(file, saturation=0.5):
 
     # Remap our sequential palette colours to display native (missing colour 4)
     remap = np.array([0, 1, 2, 3, 5, 6])
-    newBuff = remap[
+    new_buff = remap[
         np.array(image, dtype=np.uint8).reshape((frameSize["rows"], frameSize["cols"]))
     ]
 
-    buf = newBuff.flatten()
+    buf = new_buff.flatten()
 
     buf = ((buf[::2] << 4) & 0xF0) | (buf[1::2] & 0x0F)
 
@@ -189,38 +210,30 @@ def set_image(file, saturation=0.5):
     return result
 
 
-def get_sleep_time(session):
-    frameSettings = session.get(Settings, 1)
-    if not frameSettings:
-        raise HTTPException(status_code=404, detail="Frame settings not found")
-
-    hours, minutes, seconds = frameSettings.sleepInterval.split(":")
+def parse_sleep_time(sleep_time: str):
+    hours, minutes, seconds = sleep_time.split(":")
     print(int(hours), int(minutes), int(seconds))
     return [int(hours), int(minutes), int(seconds)]
-
-
-# Define the extensions to search for
-extensions = (".jpg", ".jpeg", ".png", ".heic")
 
 
 def traverse_directory(path):
     for root, dirs, files in os.walk(path):
         if len(files):
             file_name = random.choice(files)
-            if file_name.lower().endswith(extensions):
+            if file_name.lower().endswith(exts):
                 full_file_path = os.path.join(root, file_name)
                 return full_file_path
         shuffled_list = dirs[:]  # Create a shallow copy
         random.shuffle(shuffled_list)
         for dir in shuffled_list:
             full_dir_path = os.path.join(root, dir)
-            randomFile = traverse_directory(full_dir_path)
-            if len(randomFile):
-                return randomFile
+            random_file = traverse_directory(full_dir_path)
+            if len(random_file):
+                return random_file
         return ""
 
 
-def getRandomImage():
+def get_random_image_traverse():
     """Recursively finds all JPG, JPEG, PNG, and HEIC files using the glob module."""
     image_path = traverse_directory(photo_dir)
 
@@ -233,65 +246,94 @@ def getRandomImage():
     return image_path
 
 
-@app.get("/")
-def read_root(session: SessionDep):
-    random_image = getRandomImage()
+def get_random_image_orientation(orientation: OrientationType):
+    correct_orientation = False
+    while not correct_orientation:
+        chosen_image = random.choice(image_candidates)
+        with Image.open(chosen_image) as image:
+            correct_orientation = check_orientation(image, orientation)
+            if correct_orientation:
+                return chosen_image
 
-    buf = set_image(random_image)
-    sleepHeader = get_sleep_time(session)
 
-    buf = sleepHeader + buf
+def check_orientation(image, orientation: OrientationType):
+    width, height = image.size
+    if orientation == "horizontal":
+        return width > height
+    elif orientation == "vertical":
+        return height > width
+
+
+# returns header bytes followed by image buffer
+@app.get("/getFrameBuffer/{device_id}")
+def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
+    frame_settings = session.get(Settings, device_id)
+    if not frame_settings:
+        raise HTTPException(status_code=404, detail="Frame settings not found")
+
+    sleep_interval = frame_settings.sleepInterval
+    orientation = frame_settings.orientation
+
+    sleep_header = parse_sleep_time(sleep_interval)
+
+    chosen_image = get_random_image_orientation(orientation)
+    complete_buf = sleep_header + get_image_buffer(chosen_image)
 
     # imageString = np.array2string(image, precision=2, separator=', ', suppress_small=True)
-    data = bytes(buf)
+    data = bytes(complete_buf)
     # return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream")
     return Response(content=data, media_type="application/octet-stream")
 
 
-@app.get("/getSleep")
-def getSleep(session: SessionDep):
-    frameSettings = get_sleep_time(session)
-    return frameSettings
+@app.get("/getSleep/{device_id}")
+def get_sleep(device_id: DeviceIdType, session: SessionDep):
+    frame_settings = session.get(Settings, device_id)
+    sleep_time = parse_sleep_time(frame_settings.sleepInterval)
+    return sleep_time
 
 
-@app.get("/getImage")
-def getImage(session: SessionDep):
-    imagePath = getRandomImage()
-    return imagePath
+@app.get("/getImagePath/{orientation}")
+def get_image(orientation: OrientationType, session: SessionDep):
+    image_path = get_random_image_orientation(orientation)
+    return image_path
 
 
-@app.get("/getImageList")
-def getImageList(session: SessionDep):
-    imagePath = getRandomImage()
-    res_list = set_image(imagePath)
+@app.get("/getImageList/{orientation}")
+def get_image_list(orientation: OrientationType, session: SessionDep):
+    image_path = get_random_image_orientation("horizontal")
+    res_list = []
+    with Image.open(image_path) as image:
+        res_list = get_image_buffer(image)
     return res_list
 
 
-@app.post("/initializeDB")
-def initalizeDB(session: SessionDep):
-    SQLModel.metadata.create_all(engine)
-    setting = Settings(sleepInterval="00:00:45")
-    session.add(setting)
+# requires the form of HH:MM:SS
+@app.post("/setSettings/{device_id}")
+def set_db_sleep(
+    device_id: DeviceIdType,
+    new_settings: Annotated[SettingInput, Body()],
+    session: SessionDep,
+):
+    print(new_settings)
+    current_settings = session.get(Settings, device_id)
+    if not current_settings:
+        raise HTTPException(status_code=404, detail="Settings not found")
+    if new_settings.sleepInterval:
+        current_settings.sleepInterval = new_settings.sleepInterval
+    if new_settings.orientation:
+        current_settings.orientation = new_settings.orientation
 
+    session.add(current_settings)
     session.commit()
     return "Done"
 
 
-class SettingInput(BaseModel):
-    sleepInterval: str
+@app.post("/initializeDB")
+def initalize_db(session: SessionDep):
+    SQLModel.metadata.create_all(engine)
+    setting = Settings(sleepInterval="00:00:45")
+    session.add(setting)
 
-
-# requires the form of HH:MM:SS
-@app.post("/setSleep")
-def setDBSleep(settings: SettingInput, session: SessionDep):
-    print(settings)
-    if len(settings.sleepInterval) != 8 or len(settings.sleepInterval.split(":")) != 3:
-        raise HTTPException(status_code=400, detail="Bad input")
-    current_settings = session.get(Settings, 1)
-    if not current_settings:
-        raise HTTPException(status_code=404, detail="Settings not found")
-    current_settings.sleepInterval = settings
-    session.add(current_settings)
     session.commit()
     return "Done"
 

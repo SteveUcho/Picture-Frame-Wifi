@@ -11,16 +11,17 @@ RTC_DATA_ATTR int sleepInterval = 0; /* day of the month, used for checking if w
 
 const char *WIFI_SSID = "MySpectrumWiFi8A-5G";
 const char *WIFI_PASS = "Flush20ing20";
-const char *serverUrl = "http://192.168.86.28/"; // your FastAPI endpoint
+const char *serverUrl = "http://192.168.86.28:8080/"; // your FastAPI endpoint
 
-const char *ntpServer = "pool.ntp.org";    // Or another reliable NTP server
-const char *timeZone = "America/New_York"; // Example for Eastern Time, including DST rules
+// const char *ntpServer = "pool.ntp.org";    // Or another reliable NTP server
+// const char *timeZone = "America/New_York"; // Example for Eastern Time, including DST rules
 
 // Frame size (must match server)
 const size_t FRAME_ROWS = 800;
 const size_t FRAME_COLS = 480;
 const size_t PIXEL_COUNT = FRAME_ROWS * FRAME_COLS;
 const size_t PACKED_SIZE = (PIXEL_COUNT + 1) / 2;       // two pixels per byte
+
 const size_t TIME_HEADER = 4;                           // 4 bytes - Days|Hours|Minutes|Seconds
 const size_t PAYLOAD_TOTAL = TIME_HEADER + PACKED_SIZE; // total payload size, headers + image data
 
@@ -184,6 +185,9 @@ void setup()
         //     Serial.print(packedBuffer[i]);
         // }
         // Serial.println();
+        // Serial.print("sleep interval: ");
+        // Serial.println(sleepInterval);
+        // Serial.println();
 
         // init display, display image, display go to sleep
         doAllScreenStuff(packedBuffer);
@@ -197,7 +201,7 @@ void setup()
     Configure the wake up source
     We set our ESP32 to wake up every every interval or sleep long over night
     */
-    int sleepTime = sleepInterval || TIME_TO_SLEEP;
+    int sleepTime = sleepInterval | TIME_TO_SLEEP;
 
     esp_sleep_enable_timer_wakeup(sleepTime * uS_TO_S_FACTOR);
     Serial.println("Setup ESP32 to sleep for " + String(sleepTime) + " Seconds");
