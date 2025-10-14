@@ -5,6 +5,8 @@ import numpy as np
 from pathlib import Path as OsPath
 from typing import Annotated, Literal
 
+from dotenv import load_dotenv
+
 from PIL import Image
 from pillow_heif import register_heif_opener
 
@@ -14,6 +16,7 @@ from fastapi.responses import Response
 
 from sqlmodel import Field as DbField, Session, SQLModel, create_engine
 
+load_dotenv()
 register_heif_opener()
 
 photo_dir = os.environ["PHOTO_DIR"]
@@ -39,7 +42,7 @@ class SettingInput(BaseModel):
         title="sleepInterval in HH:MM:SS",
         min_length=8,
         max_length=8,
-        pattern="^\d{2}:\d{2}:\d{2}$",
+        pattern=r"^\d{2}:\d{2}:\d{2}$",
     )
     orientation: OrientationType | None = Field(
         default=None, title="set current orientation of frame"
@@ -247,6 +250,8 @@ def get_random_image_traverse():
 
 
 def get_random_image_orientation(orientation: OrientationType):
+    if not len(image_candidates):
+        return None
     correct_orientation = False
     while not correct_orientation:
         chosen_image = random.choice(image_candidates)
@@ -254,6 +259,7 @@ def get_random_image_orientation(orientation: OrientationType):
             correct_orientation = check_orientation(image, orientation)
             if correct_orientation:
                 return chosen_image
+    return None
 
 
 def check_orientation(image, orientation: OrientationType):
@@ -277,6 +283,8 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     sleep_header = parse_sleep_time(sleep_interval)
 
     chosen_image = get_random_image_orientation(orientation)
+    if not chosen_image:
+        raise HTTPException(status_code=404, detail="No pictures available to show")
     complete_buf = sleep_header + get_image_buffer(chosen_image)
 
     # imageString = np.array2string(image, precision=2, separator=', ', suppress_small=True)
@@ -294,13 +302,22 @@ def get_sleep(device_id: DeviceIdType, session: SessionDep):
 
 @app.get("/getImagePath/{orientation}")
 def get_image(orientation: OrientationType, session: SessionDep):
+    directory_path = OsPath(photo_dir)
+    files_only = [item.name for item in directory_path.iterdir()]
+    print(files_only)
+    # print(os.listdir(photo_dir))
+    print(image_candidates)
     image_path = get_random_image_orientation(orientation)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="No pictures available to show")
     return image_path
 
 
 @app.get("/getImageList/{orientation}")
 def get_image_list(orientation: OrientationType, session: SessionDep):
     image_path = get_random_image_orientation("horizontal")
+    if not image_path:
+        raise HTTPException(status_code=404, detail="No pictures available to show")
     res_list = []
     with Image.open(image_path) as image:
         res_list = get_image_buffer(image)
