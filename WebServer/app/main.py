@@ -2,7 +2,6 @@ import os
 import random
 import uvicorn
 import numpy as np
-from pathlib import Path as OsPath
 from typing import Annotated, Literal
 
 from dotenv import load_dotenv
@@ -58,9 +57,7 @@ class Settings(SQLModel, table=True):
 app = FastAPI()
 
 # Define the extensions to search for
-exts = {".jpg", ".jpeg", ".png", ".heic"}
-root = OsPath(photo_dir)
-image_candidates = [p for p in root.rglob("*") if p.suffix.lower() in exts]
+exts = (".jpg", ".jpeg", ".png", ".heic")
 
 frameSize = {
     "rows": 800,
@@ -158,13 +155,14 @@ def palette_blend(saturation, dtype="uint8"):
     return palette
 
 
-def get_image_buffer(image, saturation=0.5):
+def get_image_buffer(image_path, saturation=0.5):
     """Copy an image to the display.
 
     :param image: PIL image to copy, must be 800x480
     :param saturation: Saturation for quantization palette - higher value results in a more saturated image
 
     """
+    image = Image.open(image_path)
     image = resize_and_truncate(image)
 
     if image.size != (image.width, image.height):
@@ -215,41 +213,34 @@ def get_image_buffer(image, saturation=0.5):
 
 def parse_sleep_time(sleep_time: str):
     hours, minutes, seconds = sleep_time.split(":")
-    print(int(hours), int(minutes), int(seconds))
     return [int(hours), int(minutes), int(seconds)]
 
 
 def traverse_directory(path):
-    for root, dirs, files in os.walk(path):
-        if len(files):
-            file_name = random.choice(files)
+    results = []
+    for root, _, files in os.walk(path):
+        for file_name in files:
             if file_name.lower().endswith(exts):
                 full_file_path = os.path.join(root, file_name)
-                return full_file_path
-        shuffled_list = dirs[:]  # Create a shallow copy
-        random.shuffle(shuffled_list)
-        for dir in shuffled_list:
-            full_dir_path = os.path.join(root, dir)
-            random_file = traverse_directory(full_dir_path)
-            if len(random_file):
-                return random_file
-        return ""
+                results.append(full_file_path)
+    return results
 
 
-def get_random_image_traverse():
+def find_files_with_exts():
     """Recursively finds all JPG, JPEG, PNG, and HEIC files using the glob module."""
-    image_path = traverse_directory(photo_dir)
+    image_candidates = traverse_directory(photo_dir)
 
-    if not len(image_path):
+    if not len(image_candidates):
         raise FileNotFoundError(
             "No .jpeg, .jpg, .png, or .heic files found in the directory."
         )
 
-    print(image_path)
-    return image_path
+    return image_candidates
 
 
+# returns absolute image path
 def get_random_image_orientation(orientation: OrientationType):
+    image_candidates = find_files_with_exts()
     if not len(image_candidates):
         return None
     correct_orientation = False
@@ -270,6 +261,7 @@ def check_orientation(image, orientation: OrientationType):
         return height > width
 
 
+# endpoint called by the frame
 # returns header bytes followed by image buffer
 @app.get("/getFrameBuffer/{device_id}")
 def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
@@ -280,43 +272,19 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     sleep_interval = frame_settings.sleepInterval
     orientation = frame_settings.orientation
 
-    sleep_header = parse_sleep_time(sleep_interval)
-
-    chosen_image = get_random_image_orientation(orientation)
-    if not chosen_image:
+    image_path = get_random_image_orientation(orientation)
+    if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
-    complete_buf = sleep_header + get_image_buffer(chosen_image)
+
+    print("Device", device_id, "will display:", image_path)
+    # header bytes
+    sleep_header = parse_sleep_time(sleep_interval)
+    complete_buf = sleep_header + get_image_buffer(image_path)
 
     # imageString = np.array2string(image, precision=2, separator=', ', suppress_small=True)
     data = bytes(complete_buf)
     # return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream")
     return Response(content=data, media_type="application/octet-stream")
-
-
-@app.get("/getSleep/{device_id}")
-def get_sleep(device_id: DeviceIdType, session: SessionDep):
-    frame_settings = session.get(Settings, device_id)
-    sleep_time = parse_sleep_time(frame_settings.sleepInterval)
-    return sleep_time
-
-
-@app.get("/getImagePath/{orientation}")
-def get_image(orientation: OrientationType, session: SessionDep):
-    image_path = get_random_image_orientation(orientation)
-    if not image_path:
-        raise HTTPException(status_code=404, detail="No pictures available to show")
-    return image_path
-
-
-@app.get("/getImageList/{orientation}")
-def get_image_list(orientation: OrientationType, session: SessionDep):
-    image_path = get_random_image_orientation("horizontal")
-    if not image_path:
-        raise HTTPException(status_code=404, detail="No pictures available to show")
-    res_list = []
-    with Image.open(image_path) as image:
-        res_list = get_image_buffer(image)
-    return res_list
 
 
 # requires the form of HH:MM:SS
@@ -326,7 +294,6 @@ def set_db_sleep(
     new_settings: Annotated[SettingInput, Body()],
     session: SessionDep,
 ):
-    print(new_settings)
     current_settings = session.get(Settings, device_id)
     if not current_settings:
         raise HTTPException(status_code=404, detail="Settings not found")
@@ -340,14 +307,43 @@ def set_db_sleep(
     return "Done"
 
 
-@app.post("/initializeDB")
+@app.post("/init/initializeDB")
 def initalize_db(session: SessionDep):
     SQLModel.metadata.create_all(engine)
-    setting = Settings(sleepInterval="00:00:45")
+    setting = Settings(sleepInterval="00:00:45", orientation="horizontal")
     session.add(setting)
 
     session.commit()
     return "Done"
+
+
+#
+# testing endpoints
+#
+@app.get("/testing/getSleep/{device_id}")
+def get_sleep(device_id: DeviceIdType, session: SessionDep):
+    frame_settings = session.get(Settings, device_id)
+    sleep_time = parse_sleep_time(frame_settings.sleepInterval)
+    return sleep_time
+
+
+@app.get("/testing/getImagePath/{orientation}")
+def get_image(orientation: OrientationType, session: SessionDep):
+    image_path = get_random_image_orientation(orientation)
+    if not image_path:
+        raise HTTPException(status_code=404, detail="No pictures available to show")
+    return image_path
+
+
+@app.get("/testing/getImageList/{orientation}")
+def get_image_list(orientation: OrientationType, session: SessionDep):
+    image_path = get_random_image_orientation("horizontal")
+    if not image_path:
+        raise HTTPException(status_code=404, detail="No pictures available to show")
+    res_list = []
+    with Image.open(image_path) as image:
+        res_list = get_image_buffer(image)
+    return res_list
 
 
 if __name__ == "__main__":

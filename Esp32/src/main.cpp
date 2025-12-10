@@ -11,7 +11,7 @@ RTC_DATA_ATTR int sleepInterval = 0; /* day of the month, used for checking if w
 
 const char *WIFI_SSID = "MySpectrumWiFi8A-5G";
 const char *WIFI_PASS = "Flush20ing20";
-const char *serverUrl = "http://192.168.86.28:8080/"; // your FastAPI endpoint
+const char *serverUrl = "http://192.168.86.28:8080/getFrameBuffer/1"; // your FastAPI endpoint
 
 // const char *ntpServer = "pool.ntp.org";    // Or another reliable NTP server
 // const char *timeZone = "America/New_York"; // Example for Eastern Time, including DST rules

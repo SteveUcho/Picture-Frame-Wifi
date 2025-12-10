@@ -1,3 +1,5 @@
+blink/
+
 .pio
 **/.env
 .vscode/.browse.c_cpp.db*
