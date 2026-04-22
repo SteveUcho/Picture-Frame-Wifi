@@ -258,7 +258,9 @@ def get_location_text(exif_data):
     geo_data = req.json()
 
     if (req.status_code == requests.codes.ok):
-        city = geo_data["address"]["city"]
+        city = geo_data["address"].get("city")
+        if not city:
+            city = geo_data["address"].get("village")
         country = geo_data["address"]["country"]
         if (city == "New York"):
             suburb = geo_data["address"]["suburb"]
