@@ -17,7 +17,7 @@ services:
       watch:
         - action: sync+restart
           path: .
-          target: /code
+          target: /app
           # Exclude the project virtual environment
           ignore:
             - .venv/

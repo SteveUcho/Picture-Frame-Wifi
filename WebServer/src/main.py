@@ -1,12 +1,14 @@
 import os
 import random
 import uvicorn
+import requests
 import numpy as np
 from typing import Annotated, Literal
 
 from dotenv import load_dotenv
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
+from PIL.ExifTags import TAGS, GPSTAGS
 from pillow_heif import register_heif_opener
 
 from fastapi import Depends, FastAPI, HTTPException, Body, Path
@@ -20,6 +22,7 @@ register_heif_opener()
 
 photo_dir = os.environ["PHOTO_DIR"]
 sql_url = os.environ["DATABASE_URL"]
+user_agent = os.environ["USER_AGENT"]
 
 engine = create_engine(sql_url)
 
@@ -141,6 +144,14 @@ def resize_and_truncate(image, target_size=(800, 480)):
     )
     return truncated_image
 
+def get_decimal_from_dms(dms, ref):
+    degrees = dms[0]
+    minutes = dms[1] / 60.0
+    seconds = dms[2] / 3600.0
+    if ref in ['S', 'W']:
+        return -(degrees + minutes + seconds)
+    return degrees + minutes + seconds
+
 
 def palette_blend(saturation, dtype="uint8"):
     saturation = float(saturation)
@@ -155,22 +166,20 @@ def palette_blend(saturation, dtype="uint8"):
     return palette
 
 
-def get_image_buffer(image_path, saturation=0.5):
+def process_image(image_path, saturation=0.5, target_size=(800, 480)):
     """Copy an image to the display.
 
     :param image: PIL image to copy, must be 800x480
     :param saturation: Saturation for quantization palette - higher value results in a more saturated image
 
     """
-    image = Image.open(image_path)
+    image: Image.Image = Image.open(image_path).convert("RGBA")
     image = resize_and_truncate(image)
 
     if image.size != (image.width, image.height):
         raise ValueError(
             f"Image must be ({frameSize['rows']}x{frameSize['cols']}) pixels!"
         )
-
-    dither = Image.Dither.FLOYDSTEINBERG
 
     # Image size doesn't matter since it's just the palette we're using
     palette_image = Image.new("P", (1, 1))
@@ -191,12 +200,97 @@ def get_image_buffer(image_path, saturation=0.5):
     #         dither = Image.Dither.NONE
     # else:
 
+    exif_data = image.getexif()
+
+    location_text = get_location_text(exif_data)
+    name_text = image_path.split("/")[2].split("U")[0]
+    date_text = get_date_text(exif_data)
+    line_list = [name_text]
+    if date_text:
+        line_list.append(date_text)
+    second_line = " - ".join(line_list)
+
+    text_image = draw_text(location_text, second_line, target_size[0])
+    image_anchor = (40, target_size[1] - 60 - 45)
+    image.paste(text_image, image_anchor, text_image)
+
     # All other image should be quantized and dithered
     palette = palette_blend(saturation)
     palette_image.putpalette(palette)
 
-    image = image.convert("RGB").quantize(6, palette=palette_image, dither=dither)
+    dither = Image.Dither.FLOYDSTEINBERG
+    image_complete = image.convert("RGB").quantize(6, palette=palette_image, dither=dither)
 
+    return image_complete
+
+def get_date_text(exif_data):
+    DATE_TAG = next(
+        tag for tag, name in TAGS.items() if name == "DateTime"
+    )
+
+    datetime = exif_data.get_ifd(DATE_TAG)
+    if not datetime:
+        return
+    date = datetime.split(" ")[0].split(":")
+    dateString = "/".join([date[1], date[2], date[0]])
+
+    return dateString
+
+def get_location_text(exif_data):
+    GPSINFO_TAG = next(
+        tag for tag, name in TAGS.items() if name == "GPSInfo"
+    )
+
+    gps_info = {}
+    for key in exif_data.get_ifd(GPSINFO_TAG):
+        sub_tag_name = GPSTAGS.get(key, key)
+        gps_info[sub_tag_name] = exif_data.get_ifd(GPSINFO_TAG)[key]
+
+    if not gps_info:
+        return ""
+
+    lat = get_decimal_from_dms(gps_info['GPSLatitude'], gps_info['GPSLatitudeRef'])
+    lon = get_decimal_from_dms(gps_info['GPSLongitude'], gps_info['GPSLongitudeRef'])
+
+    payload = {"lat": lat, "lon": lon, "format": "jsonv2"}
+    headers = {"User-Agent": user_agent}
+    req = requests.request("GET","https://nominatim.openstreetmap.org/reverse", params=payload, headers=headers)
+    geo_data = req.json()
+
+    if (req.status_code == requests.codes.ok):
+        city = geo_data["address"]["city"]
+        country = geo_data["address"]["country"]
+        if (city == "New York"):
+            suburb = geo_data["address"]["suburb"]
+            return suburb + ", NY"
+        elif (country == "United States"):
+            state = geo_data["address"]["state"]
+            return city + ", " + state
+        else:
+            return city + ", " + country
+    return ""
+
+def draw_text(first_line, second_line, max_length):
+    # create an image
+    text_image = Image.new("RGBA", (max_length, 60), (255, 255, 255, 0))
+
+    # get first line font
+    fnt1 = ImageFont.truetype("GrenzeFont/static/Grenze-Bold.ttf", 50)
+    # get second line font
+    fnt2 = ImageFont.truetype("BaskervvilleFont/static/Baskervville-Regular.ttf", 25)
+
+    # start a drawing context
+    drawing = ImageDraw.Draw(text_image)
+
+    # draw first line
+    drawing.text((0, 0), first_line, font=fnt1, fill=(255, 255, 255, 255), anchor="lt", stroke_width=2, stroke_fill="black")
+    # draw second line
+    drawing.text((0, 40), second_line, font=fnt2, fill=(255, 255, 255, 255), anchor="lt", stroke_width=2, stroke_fill="black")
+
+    return text_image
+
+
+def get_image_buffer(image):
     # Remap our sequential palette colours to display native (missing colour 4)
     remap = np.array([0, 1, 2, 3, 5, 6])
     new_buff = remap[
@@ -218,7 +312,7 @@ def parse_sleep_time(sleep_time: str):
 
 def traverse_directory(path):
     results = []
-    for root, _, files in os.walk(path):
+    for root, test, files in os.walk(path):
         for file_name in files:
             if file_name.lower().endswith(exts):
                 full_file_path = os.path.join(root, file_name)
@@ -279,7 +373,8 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     print("Device", device_id, "will display:", image_path)
     # header bytes
     sleep_header = parse_sleep_time(sleep_interval)
-    complete_buf = sleep_header + get_image_buffer(image_path)
+    image = process_image(image_path)
+    complete_buf = sleep_header + get_image_buffer(image)
 
     # imageString = np.array2string(image, precision=2, separator=', ', suppress_small=True)
     data = bytes(complete_buf)
@@ -335,16 +430,24 @@ def get_image(orientation: OrientationType, session: SessionDep):
     return image_path
 
 
-@app.get("/testing/getImageList/{orientation}")
+@app.get("/testing/getImageBuffer/{orientation}")
 def get_image_list(orientation: OrientationType, session: SessionDep):
     image_path = get_random_image_orientation("horizontal")
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
-    res_list = []
-    with Image.open(image_path) as image:
-        res_list = get_image_buffer(image)
-    return res_list
+    image_buffer = []
+    image = process_image(image_path)
+    image_buffer = get_image_buffer(image)
+    return image_buffer
 
+@app.get("/testing/showImg/{orientation}")
+def show_image(orientation: OrientationType, session: SessionDep):
+    image_path = get_random_image_orientation("horizontal")
+    if not image_path:
+        raise HTTPException(status_code=404, detail="No pictures available to show")
+    image = process_image(image_path)
+    image.show()
+    return
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
