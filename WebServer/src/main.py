@@ -211,7 +211,7 @@ def process_image(image_path, saturation=0.5, target_size=(800, 480)):
     second_line = " - ".join(line_list)
 
     text_image = draw_text(location_text, second_line, target_size[0])
-    image_anchor = (40, target_size[1] - 60 - 45)
+    image_anchor = (80, target_size[1] - 60 - 45)
     image.paste(text_image, image_anchor, text_image)
 
     # All other image should be quantized and dithered
@@ -224,13 +224,7 @@ def process_image(image_path, saturation=0.5, target_size=(800, 480)):
     return image_complete
 
 def get_date_text(exif_data):
-    DATE_TAG = next(
-        tag for tag, name in TAGS.items() if name == "DateTime"
-    )
-
-    datetime = exif_data.get_ifd(DATE_TAG)
-    if not datetime:
-        return
+    datetime = exif_data.get(36867) or exif_data.get(306)
     date = datetime.split(" ")[0].split(":")
     dateString = "/".join([date[1], date[2], date[0]])
 
@@ -274,12 +268,12 @@ def get_location_text(exif_data):
 
 def draw_text(first_line, second_line, max_length):
     # create an image
-    text_image = Image.new("RGBA", (max_length, 60), (255, 255, 255, 0))
+    text_image = Image.new("RGBA", (max_length, 100), (255, 255, 255, 0))
 
     # get first line font
     fnt1 = ImageFont.truetype("GrenzeFont/static/Grenze-Bold.ttf", 50)
     # get second line font
-    fnt2 = ImageFont.truetype("BaskervvilleFont/static/Baskervville-Regular.ttf", 25)
+    fnt2 = ImageFont.truetype("BaskervvilleFont/static/Baskervville-Regular.ttf", 35)
 
     # start a drawing context
     drawing = ImageDraw.Draw(text_image)
