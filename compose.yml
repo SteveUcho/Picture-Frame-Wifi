@@ -1,7 +1,12 @@
 services:
+  frontend:
+    build: ./Frontend
+    ports:
+      - "80:80"
+
   api:
-    build: .
-    env_file: .env
+    build: ./WebServer
+    env_file: ./WebServer/.env
     ports:
       - "8080:80"
     volumes:
@@ -27,7 +32,7 @@ services:
 
   db:
     image: mysql:8.0
-    env_file: .env
+    env_file: ./WebServer/.env
     ports:
       - "3306:3306" # Expose MySQL port to host
     volumes:
