@@ -14,6 +14,7 @@ from pillow_heif import register_heif_opener
 from fastapi import Depends, FastAPI, HTTPException, Body, Path
 from pydantic import BaseModel, Field
 from fastapi.responses import Response
+from fastapi.middleware.cors import CORSMiddleware
 
 from sqlmodel import Field as DbField, Session, SQLModel, create_engine
 
@@ -59,13 +60,23 @@ class Settings(SQLModel, table=True):
 
 app = FastAPI()
 
+origins = [
+    "http://localhost",
+    "http://localhost:8000",
+    "http://localhost:8080",
+    "http://localhost:4321"
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Define the extensions to search for
 exts = (".jpg", ".jpeg", ".png", ".heic")
-
-frameSize = {
-    "rows": 800,
-    "cols": 480,
-}
 
 SATURATED_PALETTE = [
     [0, 0, 0],
@@ -169,20 +180,18 @@ def palette_blend(saturation, dtype="uint8"):
 def process_image(image_path, saturation=0.5, target_size=(800, 480)):
     """Copy an image to the display.
 
-    :param image: PIL image to copy, must be 800x480
+    :param image_path: Path to the image file
     :param saturation: Saturation for quantization palette - higher value results in a more saturated image
+    :param target_size: Target size of the image (width, height)
+    :param stroke_width: Stroke width for text
 
     """
     image: Image.Image = Image.open(image_path).convert("RGBA")
-    image = resize_and_truncate(image)
-
-    if image.size != (image.width, image.height):
-        raise ValueError(
-            f"Image must be ({frameSize['rows']}x{frameSize['cols']}) pixels!"
-        )
-
-    # Image size doesn't matter since it's just the palette we're using
-    palette_image = Image.new("P", (1, 1))
+    image = resize_and_truncate(image, target_size)
+    first_line, second_line = get_draw_text(image, image_path)
+    image = add_text_stage(image, image_path, target_size, first_line, second_line)
+    image = finalize_image(image, saturation)
+    return image
 
     # if image.mode == "P":
     #     # Create a pure colour palette from DESATURATED_PALETTE
@@ -200,28 +209,35 @@ def process_image(image_path, saturation=0.5, target_size=(800, 480)):
     #         dither = Image.Dither.NONE
     # else:
 
+def get_draw_text(image, image_path):
     exif_data = image.getexif()
-
-    location_text = get_location_text(exif_data)
+    first_line = get_location_text(exif_data)
     name_text = image_path.split("/")[2].split("U")[0]
     date_text = get_date_text(exif_data)
     line_list = [name_text]
     if date_text:
         line_list.append(date_text)
     second_line = " - ".join(line_list)
+    return first_line, second_line
 
-    text_image = draw_text(location_text, second_line, target_size[0])
+
+def add_text_stage(image, image_path, target_size, first_line, second_line, ):
+    text_image = draw_text(first_line, second_line, target_size[0])
     image_anchor = (80, target_size[1] - 60 - 45)
     image.paste(text_image, image_anchor, text_image)
+    return image
 
-    # All other image should be quantized and dithered
+def finalize_image(image, saturation=0.5):
+    # Image size doesn't matter since it's just the palette we're using
+    palette_image = Image.new("P", (1, 1))
+
     palette = palette_blend(saturation)
     palette_image.putpalette(palette)
 
     dither = Image.Dither.FLOYDSTEINBERG
     image_complete = image.convert("RGB").quantize(6, palette=palette_image, dither=dither)
-
     return image_complete
+
 
 def get_date_text(exif_data):
     datetime = exif_data.get(36867) or exif_data.get(306)
@@ -438,7 +454,7 @@ def get_image_list(orientation: OrientationType, session: SessionDep):
 
 @app.get("/testing/showImg/{orientation}")
 def show_image(orientation: OrientationType, session: SessionDep):
-    image_path = get_random_image_orientation("horizontal")
+    image_path = get_random_image_orientation(orientation)
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
     image = process_image(image_path)

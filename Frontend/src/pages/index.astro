@@ -1,0 +1,44 @@
+---
+import '../styles/index.css';
+import { CustomForm } from '../components/CustomForm.tsx';
+import { CustomField } from '../components/CustomField.tsx';
+import { formInput } from '../utils/classNames';
+---
+
+<html>
+	<head>
+		<title>Picture Frame Wifi</title>
+	</head>
+	<body>
+		<h1>Picture Frame Wifi</h1>
+		<div>
+			<p>Connect to the WiFi network to configure your picture frame.</p>
+			<div class="p-4">
+				<CustomForm client:load submitURL="/setSettings/:deviceId">
+					<CustomField client:load name='deviceId' label="Device ID" />
+					<div>
+						<label for="sleep-interval">Sleep Interval</label>
+						<input
+							type="text"
+							id="sleep-interval"
+							name="sleepInterval"
+							class={formInput}
+							placeholder="00:00:00"
+						/>
+					</div>
+					<div>
+						<label for="orientation">Orientation</label>
+						<input
+							type="text"
+							id="orientation"
+							name="orientation"
+							class={formInput}
+							placeholder="horizontal"
+						/>
+					</div>
+					<button type="submit" class="p-2 bg-blue-500 text-white rounded-lg">Set</button>
+				</CustomForm>
+			</div>
+		</div>
+	</body>
+</html>
