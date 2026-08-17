@@ -3,6 +3,8 @@ import random
 import uvicorn
 import requests
 import numpy as np
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Annotated, Literal
 
 from dotenv import load_dotenv
@@ -50,13 +52,19 @@ class SettingInput(BaseModel):
     orientation: OrientationType | None = Field(
         default=None, title="set current orientation of frame"
     )
+    size: int | None = Field(default=None, title="set current size of frame")
 
 
 class Settings(SQLModel, table=True):
-    id: int | None = DbField(default=None, primary_key=True)
+    id: int = DbField(default=1, primary_key=True)
     sleepInterval: str
     orientation: str = "horizontal"
+    size: int
 
+class Models(SQLModel, table=True):
+    size: int = DbField(primary_key=True)
+    length: int
+    width: int
 
 app = FastAPI()
 
@@ -117,32 +125,32 @@ def rotate_image(image):
         return image.rotate(180)
 
 
-def resize_and_truncate(image, target_size=(800, 480)):
+def resize_and_truncate(image, frame_size):
     """Resize the image to fit the target size and truncate symmetrically"""
     # Calculate the aspect ratio
     aspect_ratio = image.width / image.height
-    target_aspect_ratio = target_size[0] / target_size[1]
+    target_aspect_ratio = frame_size[0] / frame_size[1]
 
     # Resize the image proportionally
     if aspect_ratio > target_aspect_ratio:
         # Resize by height and then truncate the width symmetrically
         resized_image = image.resize(
-            (int(target_size[1] * aspect_ratio), target_size[1]), Image.LANCZOS
+            (int(frame_size[1] * aspect_ratio), frame_size[1]), Image.LANCZOS
         )
-        left_margin = (resized_image.width - target_size[0]) // 2
-        right_margin = (resized_image.width - target_size[0] + 1) // 2
+        left_margin = (resized_image.width - frame_size[0]) // 2
+        right_margin = (resized_image.width - frame_size[0] + 1) // 2
         top_margin = 0
         bottom_margin = 0
 
     else:
         # Resize by width and then truncate the height symmetrically
         resized_image = image.resize(
-            (target_size[0], int(target_size[0] / aspect_ratio)), Image.LANCZOS
+            (frame_size[0], int(frame_size[0] / aspect_ratio)), Image.LANCZOS
         )
         left_margin = 0
         right_margin = 0
-        top_margin = (resized_image.height - target_size[1]) // 2
-        bottom_margin = (resized_image.height - target_size[1] + 1) // 2
+        top_margin = (resized_image.height - frame_size[1]) // 2
+        bottom_margin = (resized_image.height - frame_size[1] + 1) // 2
 
     # Truncate symmetrically from both sides to fit the target size
     truncated_image = resized_image.crop(
@@ -177,19 +185,18 @@ def palette_blend(saturation, dtype="uint8"):
     return palette
 
 
-def process_image(image_path, saturation=0.5, target_size=(800, 480)):
+def process_image(image_path, frame_size):
     """Copy an image to the display.
 
     :param image_path: Path to the image file
-    :param saturation: Saturation for quantization palette - higher value results in a more saturated image
-    :param target_size: Target size of the image (width, height)
-    :param stroke_width: Stroke width for text
+    :param frame_size: Target size of the image (width, height)
 
     """
+    saturation = 0.5
     image: Image.Image = Image.open(image_path).convert("RGBA")
-    image = resize_and_truncate(image, target_size)
+    image = resize_and_truncate(image, frame_size)
     first_line, second_line = get_draw_text(image, image_path)
-    image = add_text_stage(image, image_path, target_size, first_line, second_line)
+    image = add_text_to_image(image, frame_size, first_line, second_line)
     image = finalize_image(image, saturation)
     return image
 
@@ -221,9 +228,9 @@ def get_draw_text(image, image_path):
     return first_line, second_line
 
 
-def add_text_stage(image, image_path, target_size, first_line, second_line, ):
-    text_image = draw_text(first_line, second_line, target_size[0])
-    image_anchor = (80, target_size[1] - 60 - 45)
+def add_text_to_image(image, frame_size, first_line, second_line):
+    text_image = draw_text(first_line, second_line, frame_size[0])
+    image_anchor = (80, frame_size[1] - 60 - 45)
     image.paste(text_image, image_anchor, text_image)
     return image
 
@@ -242,9 +249,9 @@ def finalize_image(image, saturation=0.5):
 def get_date_text(exif_data):
     datetime = exif_data.get(36867) or exif_data.get(306)
     date = datetime.split(" ")[0].split(":")
-    dateString = "/".join([date[1], date[2], date[0]])
+    date_string = "/".join([date[1], date[2], date[0]])
 
-    return dateString
+    return date_string
 
 def get_location_text(exif_data):
     GPSINFO_TAG = next(
@@ -268,15 +275,15 @@ def get_location_text(exif_data):
     geo_data = req.json()
 
     if (req.status_code == requests.codes.ok):
-        city = geo_data["address"].get("city")
+        city = str(geo_data["address"].get("city"))
         if not city:
-            city = geo_data["address"].get("village")
-        country = geo_data["address"]["country"]
+            city = str(geo_data["address"].get("village"))
+        country = str(geo_data["address"]["country"])
         if (city == "New York"):
-            suburb = geo_data["address"]["suburb"]
+            suburb = str(geo_data["address"]["suburb"])
             return suburb + ", NY"
         elif (country == "United States"):
-            state = geo_data["address"]["state"]
+            state = str(geo_data["address"]["state"])
             return city + ", " + state
         else:
             return city + ", " + country
@@ -287,9 +294,11 @@ def draw_text(first_line, second_line, max_length):
     text_image = Image.new("RGBA", (max_length, 100), (255, 255, 255, 0))
 
     # get first line font
-    fnt1 = ImageFont.truetype("GrenzeFont/static/Grenze-Bold.ttf", 50)
+    # fnt1 = ImageFont.truetype("GrenzeFont/static/Grenze-Bold.ttf", 50)
+    fnt1 = ImageFont.truetype("fonts/Murecho/Murecho-VariableFont_wght.ttf", 50)
     # get second line font
-    fnt2 = ImageFont.truetype("BaskervvilleFont/static/Baskervville-Regular.ttf", 35)
+    # fnt2 = ImageFont.truetype("BaskervvilleFont/static/Baskervville-Regular.ttf", 35)
+    fnt2 = ImageFont.truetype("fonts/Murecho/Murecho-VariableFont_wght.ttf", 35)
 
     # start a drawing context
     drawing = ImageDraw.Draw(text_image)
@@ -302,11 +311,11 @@ def draw_text(first_line, second_line, max_length):
     return text_image
 
 
-def get_image_buffer(image):
+def get_image_buffer(image, frame_size):
     # Remap our sequential palette colours to display native (missing colour 4)
     remap = np.array([0, 1, 2, 3, 5, 6])
     new_buff = remap[
-        np.array(image, dtype=np.uint8).reshape((frameSize["rows"], frameSize["cols"]))
+        np.array(image, dtype=np.uint8).reshape((frame_size[0], frame_size[1]))
     ]
 
     buf = new_buff.flatten()
@@ -374,7 +383,11 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     frame_settings = session.get(Settings, device_id)
     if not frame_settings:
         raise HTTPException(status_code=404, detail="Frame settings not found")
+    frame_model = session.get(Models, frame_settings.size)
+    if not frame_model:
+        raise HTTPException(status_code=404, detail="Frame model not found")
 
+    frame_size = (frame_model.length, frame_model.width)
     sleep_interval = frame_settings.sleepInterval
     orientation = frame_settings.orientation
 
@@ -382,11 +395,13 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
 
-    print("Device", device_id, "will display:", image_path)
+    ny_time = datetime.now(ZoneInfo("America/New_York"))
+    formatted_time = ny_time.strftime("%Y-%m-%d %I:%M:%S%p")
+    print(formatted_time, "-- Device", device_id, "will display:", image_path)
     # header bytes
     sleep_header = parse_sleep_time(sleep_interval)
-    image = process_image(image_path)
-    complete_buf = sleep_header + get_image_buffer(image)
+    image = process_image(image_path, frame_size)
+    complete_buf = sleep_header + get_image_buffer(image, frame_size)
 
     # imageString = np.array2string(image, precision=2, separator=', ', suppress_small=True)
     data = bytes(complete_buf)
@@ -448,8 +463,8 @@ def get_image_list(orientation: OrientationType, session: SessionDep):
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
     image_buffer = []
-    image = process_image(image_path)
-    image_buffer = get_image_buffer(image)
+    image = process_image(image_path, (128, 128))
+    image_buffer = get_image_buffer(image, (128, 128))
     return image_buffer
 
 @app.get("/testing/showImg/{orientation}")
@@ -457,9 +472,8 @@ def show_image(orientation: OrientationType, session: SessionDep):
     image_path = get_random_image_orientation(orientation)
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
-    image = process_image(image_path)
+    image = process_image(image_path, (128, 128))
     image.show()
-    return
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

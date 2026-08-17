@@ -13,5 +13,9 @@ uv run src/main.py
 ### Production
 - you need both `PHOTO_DIR` and `PHOTO_SRC` set in `.env`
 
+### Alembic
+- `uv run alembic revision -m "message"`
+- `uv run alembic upgrade head`
+
 TODO
 - try to store index of images once and append new images periodically
