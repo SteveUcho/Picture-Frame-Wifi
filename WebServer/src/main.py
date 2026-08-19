@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlmodel import Field as DbField, Session, SQLModel, create_engine
+from sqlmodel import Field as DbField, Session, SQLModel, create_engine, select
 
 load_dotenv()
 register_heif_opener()
@@ -409,9 +409,24 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     return Response(content=data, media_type="application/octet-stream")
 
 
+@app.get("/admin/getDevices")
+def get_devices(session: SessionDep):
+    devices = session.exec(select(Settings)).all()
+    dev_list = [device.id for device in devices]
+    return dev_list
+
+
+@app.get("/admin/getDeviceSettings/{device_id}")
+def get_device_settings(device_id: DeviceIdType, session: SessionDep):
+    device_settings = session.get(Settings, device_id)
+    if not device_settings:
+        raise HTTPException(status_code=404, detail="Device settings not found")
+    return device_settings
+
+
 # requires the form of HH:MM:SS
-@app.post("/setSettings/{device_id}")
-def set_db_sleep(
+@app.post("/admin/setDeviceSettings/{device_id}")
+def set_device_settings(
     device_id: DeviceIdType,
     new_settings: Annotated[SettingInput, Body()],
     session: SessionDep,

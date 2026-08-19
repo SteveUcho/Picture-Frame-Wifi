@@ -3,16 +3,31 @@ services:
     build: ./Frontend
     ports:
       - "80:80"
+    environment:
+      - PUBLIC_API_URL=${FE_PUBLIC_API_URL}
+    develop:
+      watch:
+        - path: ./Frontend
+          action: sync+restart
+          target: /app
+          ignore:
+            - ./Frontend/node_modules
+        - path: ./Frontend/bun.lock
+          action: rebuild
+          target: /app
 
   api:
     build: ./WebServer
-    env_file: ./WebServer/.env
     ports:
       - "8080:80"
+    environment:
+      - PHOTO_DIR=${BE_PHOTO_DIR}
+      - USER_AGENT=${BE_USER_AGENT}
+      - DATABASE_URL=${BE_DATABASE_URL}
     volumes:
       - type: bind
-        source: ${PHOTO_SRC}
-        target: ${PHOTO_DIR}
+        source: ${BE_PHOTO_SRC}
+        target: ${BE_PHOTO_DIR}
         read_only: true
     depends_on:
       # db:
@@ -21,7 +36,7 @@ services:
     develop:
       watch:
         - action: sync+restart
-          path: .
+          path: ./WebServer
           target: /app
           # Exclude the project virtual environment
           ignore:
@@ -32,7 +47,9 @@ services:
 
   db:
     image: mysql:8.0
-    env_file: ./WebServer/.env
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
     ports:
       - "3306:3306" # Expose MySQL port to host
     volumes:
