@@ -2,22 +2,23 @@ import os
 import uvicorn
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Annotated
 
 from dotenv import load_dotenv
 
 from pillow_heif import register_heif_opener
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from sqlmodel import  SQLModel, select
+from sqlmodel import  SQLModel
 
 from .constants import origins
 from .image_processing import process_image, get_image_buffer
 from .utils import get_random_image_orientation, parse_sleep_time
-from .models import Settings, SessionDep, OrientationType, DeviceIdType, Models, engine, SettingInput
+from .models import Settings, SessionDep, DeviceIdType, Models, engine
+
+from .routers import admin, testing
 
 load_dotenv()
 register_heif_opener()
@@ -26,6 +27,8 @@ photo_dir = os.environ["PHOTO_DIR"]
 
 app = FastAPI()
 
+app.include_router(admin.router)
+app.include_router(testing.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,7 +54,7 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     sleep_interval = frame_settings.sleepInterval
     orientation = frame_settings.orientation
 
-    image_path = get_random_image_orientation(orientation)
+    image_path = get_random_image_orientation(orientation, photo_dir)
     if not image_path:
         raise HTTPException(status_code=404, detail="No pictures available to show")
 
@@ -69,40 +72,6 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
     return Response(content=data, media_type="application/octet-stream")
 
 
-@app.get("/admin/getDevices")
-def get_devices(session: SessionDep):
-    devices = session.exec(select(Settings)).all()
-    dev_list = [device.id for device in devices]
-    return dev_list
-
-
-@app.get("/admin/getDeviceSettings/{device_id}")
-def get_device_settings(device_id: DeviceIdType, session: SessionDep):
-    device_settings = session.get(Settings, device_id)
-    if not device_settings:
-        raise HTTPException(status_code=404, detail="Device settings not found")
-    return device_settings
-
-
-# requires the form of HH:MM:SS
-@app.post("/admin/setDeviceSettings/{device_id}")
-def set_device_settings(
-    device_id: DeviceIdType,
-    new_settings: Annotated[SettingInput, Body()],
-    session: SessionDep,
-):
-    current_settings = session.get(Settings, device_id)
-    if not current_settings:
-        raise HTTPException(status_code=404, detail="Settings not found")
-    if new_settings.sleepInterval:
-        current_settings.sleepInterval = new_settings.sleepInterval
-    if new_settings.orientation:
-        current_settings.orientation = new_settings.orientation
-
-    session.add(current_settings)
-    session.commit()
-    return "Done"
-
 
 @app.post("/init/initializeDB")
 def initalize_db(session: SessionDep):
@@ -113,42 +82,6 @@ def initalize_db(session: SessionDep):
     session.commit()
     return "Done"
 
-
-#
-# testing endpoints
-#
-@app.get("/testing/getSleep/{device_id}")
-def get_sleep(device_id: DeviceIdType, session: SessionDep):
-    frame_settings = session.get(Settings, device_id)
-    sleep_time = parse_sleep_time(frame_settings.sleepInterval)
-    return sleep_time
-
-
-@app.get("/testing/getImagePath/{orientation}")
-def get_image(orientation: OrientationType, session: SessionDep):
-    image_path = get_random_image_orientation(orientation)
-    if not image_path:
-        raise HTTPException(status_code=404, detail="No pictures available to show")
-    return image_path
-
-
-@app.get("/testing/getImageBuffer/{orientation}")
-def get_image_list(orientation: OrientationType, session: SessionDep):
-    image_path = get_random_image_orientation("horizontal")
-    if not image_path:
-        raise HTTPException(status_code=404, detail="No pictures available to show")
-    image_buffer = []
-    image = process_image(image_path, (128, 128))
-    image_buffer = get_image_buffer(image, (128, 128))
-    return image_buffer
-
-@app.get("/testing/showImg/{orientation}")
-def show_image(orientation: OrientationType, session: SessionDep):
-    image_path = get_random_image_orientation(orientation)
-    if not image_path:
-        raise HTTPException(status_code=404, detail="No pictures available to show")
-    image = process_image(image_path, (128, 128))
-    image.show()
 
 def main():
     uvicorn.run(app, host="0.0.0.0", port=8000)
