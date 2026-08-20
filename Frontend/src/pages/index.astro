@@ -4,22 +4,26 @@ import { Separator, Surface } from "@heroui/react";
 
 import { CustomForm } from "../components/CustomForm.tsx";
 import { DevicePicker, demoDevices } from "../components/DevicePicker.tsx";
+import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
 ---
 
-<html class="dark" data-theme="dark">
+<html class="dark">
   <head>
     <title>Picture Frame Wifi</title>
   </head>
   <body>
     <div class="p-4 h-dvh flex gap-4">
       <Surface className="w-fit rounded-xl p-2">
-        <h1 class="text-xl font-bold pt-1 pb-2 px-2">Frames</h1>
+        <div class="flex justify-between items-center p-2">
+          <h1 class="text-xl font-bold">Frames</h1>
+          <DarkModeToggle client:idle />
+        </div>
         <Separator />
         <DevicePicker client:idle devices={demoDevices} className="mt-2" />
       </Surface>
       <Surface className="p-8 flex-1 rounded-xl flex flex-col h-full">
         <div
-          class="mb-2 rounded-md bg-default p-4 border border-warning text-sm"
+          class="mb-2 rounded-md dark:bg-default p-4 border border-warning text-sm"
         >
           <p class="text-warning">
             <span class="font-bold">Attention: </span>Connect to Frame
