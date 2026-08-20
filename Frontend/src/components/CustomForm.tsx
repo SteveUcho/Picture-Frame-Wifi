@@ -1,11 +1,12 @@
 import { useAtomValue } from "jotai";
 import { urlVarsAtom } from "../utils/atoms";
+import { Form, TextField, Label, Input, FieldError, Description, Button, ScrollShadow, Select, ListBox } from "@heroui/react";
 
 interface CustomFormProps extends React.HTMLAttributes<HTMLFormElement> {
   submitURL: string;
 }
 
-export function CustomForm(props: CustomFormProps) {
+export function CustomForm(props: Readonly<CustomFormProps>) {
   const { children, submitURL, ...rest } = props;
   const urlVars = useAtomValue(urlVarsAtom);
   const apiUrl = import.meta.env.PUBLIC_API_URL;
@@ -31,10 +32,50 @@ export function CustomForm(props: CustomFormProps) {
       }
     });
   };
-  
+
+  // TODO: Submit pull request to move heroui from using deprecated React.FormEvent to React.SubmitEvent
   return (
-      <form {...rest} onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {children}
-      </form>
+    <Form className="flex flex-col gap-2 w-full flex-1 min-h-0" onSubmit={handleSubmit as any}>
+      <ScrollShadow className="flex flex-col gap-2 flex-1">
+        <TextField
+          name="sleepInterval"
+          type="text"
+          variant="secondary"
+        >
+          <Label>Sleep Interval</Label>
+          <Input placeholder="00:00:00" />
+          <Description>Format: HH:MM:SS</Description>
+          <FieldError />
+        </TextField>
+        <Select fullWidth placeholder="Select orientation" variant="secondary">
+          <Label>Orientation</Label>
+          <Select.Trigger>
+            <Select.Value />
+            <Select.Indicator />
+          </Select.Trigger>
+          <Select.Popover>
+            <ListBox>
+              <ListBox.Item id="horizontal" textValue="Horizontal">
+                Horizontal
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+              <ListBox.Item id="vertical" textValue="Vertical">
+                Vertical
+                <ListBox.ItemIndicator />
+              </ListBox.Item>
+            </ListBox>
+          </Select.Popover>
+          <Description>Options: horizontal, vertical</Description>
+        </Select>
+      </ScrollShadow>
+      <div className="flex gap-2">
+        <Button type="submit" className="flex-1">
+          Submit
+        </Button>
+        <Button type="reset" variant="secondary">
+          Reset
+        </Button>
+      </div>
+    </Form>
   );
 }
