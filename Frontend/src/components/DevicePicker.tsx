@@ -1,4 +1,6 @@
-import { Avatar, Description, Label, ListBox } from "@heroui/react";
+import { Avatar, Description, Label, ListBox, type Selection } from "@heroui/react";
+import { selectedDeviceAtom } from "../utils/atoms";
+import { useAtom } from "jotai";
 
 interface Device {
   id: string;
@@ -25,9 +27,21 @@ interface DevicePickerProps extends React.ComponentProps<typeof ListBox> {
 
 export function DevicePicker(props: Readonly<DevicePickerProps>) {
   const { devices, className, ...otherProps } = props;
+  const [selectedDevice, setSelectedDevice] = useAtom(selectedDeviceAtom);
+
+  const handleSlected = (selection: Selection) => {
+    const key = Array.from(selection)[0];
+    setSelectedDevice(key as string);
+  };
 
   return (
-    <ListBox className={`w-full p-0 ${className}`} selectionMode="single" {...otherProps}>
+    <ListBox
+      className={`w-full p-0 ${className}`}
+      selectionMode="single"
+      selectedKeys={selectedDevice ? [selectedDevice] : []}
+      onSelectionChange={handleSlected}
+      {...otherProps}
+    >
       {devices.map((device) => (
         <ListBox.Item key={device.id} id={device.id} textValue={device.name}>
           <Avatar size="sm">

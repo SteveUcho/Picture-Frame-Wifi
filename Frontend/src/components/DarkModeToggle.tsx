@@ -1,13 +1,17 @@
 import { useAtom } from "jotai";
 import { Switch } from "@heroui/react";
 import { darkModeAtom } from "../utils/atoms";
+import { useEffect } from "react";
 
 export function DarkModeToggle() {
   const [isDark, setIsDark] = useAtom(darkModeAtom);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDark);
+  }, [isDark]);
+
   const handleToggle = () => {
     setIsDark(prev => !prev);
-    document.documentElement.classList.toggle('dark', !isDark);
   };
 
   return (
