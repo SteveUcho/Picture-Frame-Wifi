@@ -7,7 +7,8 @@ interface CustomFieldProps {
   label: string;
 }
 
-export function CustomField({ name, label }: CustomFieldProps) {
+export function CustomField(props: Readonly<CustomFieldProps>) {
+  const { name, label } = props;
   const [urlVars, setUrlVars] = useAtom(urlVarsAtom);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

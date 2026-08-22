@@ -1,44 +1,40 @@
 ---
-import '../styles/index.css';
-import { CustomForm } from '../components/CustomForm.tsx';
-import { CustomField } from '../components/CustomField.tsx';
-import { formInput } from '../utils/classNames';
+import "../styles/index.css";
+import { Separator, Surface } from "@heroui/react";
+
+import { CustomForm } from "../components/CustomForm.tsx";
+import { DevicePicker, demoDevices } from "../components/DevicePicker.tsx";
+import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
 ---
 
-<html>
-	<head>
-		<title>Picture Frame Wifi</title>
-	</head>
-	<body>
-		<h1>Picture Frame Wifi</h1>
-		<div>
-			<p>Connect to the WiFi network to configure your picture frame.</p>
-			<div class="p-4">
-				<CustomForm client:load submitURL="/setSettings/:deviceId">
-					<CustomField client:load name='deviceId' label="Device ID" />
-					<div>
-						<label for="sleep-interval">Sleep Interval</label>
-						<input
-							type="text"
-							id="sleep-interval"
-							name="sleepInterval"
-							class={formInput}
-							placeholder="00:00:00"
-						/>
-					</div>
-					<div>
-						<label for="orientation">Orientation</label>
-						<input
-							type="text"
-							id="orientation"
-							name="orientation"
-							class={formInput}
-							placeholder="horizontal"
-						/>
-					</div>
-					<button type="submit" class="p-2 bg-blue-500 text-white rounded-lg">Set</button>
-				</CustomForm>
-			</div>
-		</div>
-	</body>
+<html class="dark bg-default dark:bg-background">
+  <head>
+    <title>Picture Frame Wifi</title>
+  </head>
+  <body>
+    <div class="p-4 h-dvh flex gap-4 max-w-3xl mx-auto">
+      <Surface className="w-fit rounded-xl p-2">
+        <div class="flex justify-between items-center p-2">
+          <h1 class="text-xl font-bold">Frames</h1>
+          <DarkModeToggle client:idle />
+        </div>
+        <Separator />
+        <DevicePicker client:idle devices={demoDevices} className="mt-2" />
+      </Surface>
+      <Surface className="p-8 flex-1 rounded-xl flex flex-col h-full">
+        <div
+          class="mb-2 rounded-md dark:bg-default p-4 border border-warning text-sm"
+        >
+          <p class="text-warning">
+            <span class="font-bold">Attention: </span>Connect to Frame
+          </p>
+          <p>
+            To configure your picture frame you must connect to the same WiFi
+            network
+          </p>
+        </div>
+        <CustomForm client:idle submitURL="/admin/setSettings/:deviceId" />
+      </Surface>
+    </div>
+  </body>
 </html>
