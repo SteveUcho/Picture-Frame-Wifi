@@ -38,6 +38,7 @@ class Settings(SQLModel, table=True):
     sleepInterval: str
     orientation: str = "horizontal"
     size: int
+    name: str
 
 class Models(SQLModel, table=True):
     size: int = DbField(primary_key=True)

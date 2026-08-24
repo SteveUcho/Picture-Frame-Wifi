@@ -1,7 +1,7 @@
 import { useAtomValue } from "jotai";
-import { urlVarsAtom } from "../utils/atoms";
+import { urlVarsAtom, selectedDeviceAtom } from "../utils/atoms";
 import { Form, TextField, Label, Input, FieldError, Description, Button, ScrollShadow, Select, ListBox } from "@heroui/react";
-import { selectedDeviceAtom } from "../utils/atoms";
+import { fetchWithBackend } from "../utils/fetch";
 
 interface CustomFormProps extends React.HTMLAttributes<HTMLFormElement> {
   submitURL: string;
@@ -11,7 +11,6 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
   const { children, submitURL, ...rest } = props;
   const selectedDevice = useAtomValue(selectedDeviceAtom);
   const urlVars = useAtomValue(urlVarsAtom);
-  const apiUrl = import.meta.env.PUBLIC_API_URL;
 
   const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -26,12 +25,9 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
         delete jsonBody[key];
       }
     }
-    fetch(apiUrl + apiPath, {
+    fetchWithBackend(apiPath, {
       method: "POST",
-      body: JSON.stringify(jsonBody),
-      headers: {
-        "Content-Type": "application/json"
-      }
+      body: JSON.stringify(jsonBody)
     });
   };
 
