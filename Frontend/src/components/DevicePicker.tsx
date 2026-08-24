@@ -1,5 +1,5 @@
 import { Avatar, Description, Label, ListBox, type Selection } from "@heroui/react";
-import { selectedDeviceAtom } from "../utils/atoms";
+import { urlVarsAtom } from "../utils/atoms";
 import { useAtom } from "jotai";
 import { useEffect, useState } from "react";
 import { fetchWithBackend } from "../utils/fetch";
@@ -13,7 +13,7 @@ interface Device {
 export function DevicePicker(props: Readonly<React.ComponentProps<typeof ListBox>>) {
   const { className, ...otherProps } = props;
   const [devices, setDevices] = useState<Device[]>([{ id: "loading", name: "Loading...", model: "" }]);
-  const [selectedDevice, setSelectedDevice] = useAtom(selectedDeviceAtom);
+  const [urlVars, setUrlVars] = useAtom(urlVarsAtom);
 
   useEffect(() => {
     // get devices from backend
@@ -25,15 +25,15 @@ export function DevicePicker(props: Readonly<React.ComponentProps<typeof ListBox
   }, []);
 
   const handleSlected = (selection: Selection) => {
-    const key = Array.from(selection)[0];
-    setSelectedDevice(key as string);
+    const value = Array.from(selection)[0];
+    setUrlVars({ ...urlVars, deviceId: value as string });
   };
 
   return (
     <ListBox
       className={`w-full p-0 ${className}`}
       selectionMode="single"
-      selectedKeys={selectedDevice ? [selectedDevice] : []}
+      selectedKeys={urlVars.deviceId ? [urlVars.deviceId] : []}
       onSelectionChange={handleSlected}
       disabledKeys={["no-devices"]}
       {...otherProps}

@@ -1,9 +1,12 @@
+const apiBaseUrl = import.meta.env.PUBLIC_API_URL;
+
 export const fetchWithBackend = (url: string, options?: RequestInit) => {
-  return fetch(import.meta.env.PUBLIC_API_URL + url, {
+  const { headers, ...rest } = options || {};
+  return fetch(apiBaseUrl + url, {
     headers: {
-      ...options?.headers,
+      ...headers,
       'Content-Type': 'application/json'
     },
-    ...options
+    ...rest
   });
 };

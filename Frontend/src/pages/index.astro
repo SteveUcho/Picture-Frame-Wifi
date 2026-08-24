@@ -19,21 +19,10 @@ import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
           <DarkModeToggle client:idle />
         </div>
         <Separator />
-        <DevicePicker client:idle className="mt-2" />
+        <DevicePicker client:load className="mt-2" />
       </Surface>
       <Surface className="p-8 flex-1 rounded-xl flex flex-col h-full">
-        <div
-          class="mb-2 rounded-md dark:bg-default p-4 border border-warning text-sm"
-        >
-          <p class="text-warning">
-            <span class="font-bold">Attention: </span>Connect to Frame
-          </p>
-          <p>
-            To configure your picture frame you must connect to the same WiFi
-            network
-          </p>
-        </div>
-        <CustomForm client:idle submitURL="/admin/setSettings/:deviceId" />
+        <CustomForm client:idle submitURL="/admin/setDeviceSettings/:deviceId" />
       </Surface>
     </div>
   </body>

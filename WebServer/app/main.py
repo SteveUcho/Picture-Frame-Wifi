@@ -76,8 +76,10 @@ def get_frame_buffer(device_id: DeviceIdType, session: SessionDep):
 @app.post("/init/initializeDB")
 def initalize_db(session: SessionDep):
     SQLModel.metadata.create_all(engine)
-    setting = Settings(sleepInterval="00:00:45", orientation="horizontal")
+    setting = Settings(sleepInterval="00:00:45", orientation="horizontal", size=8, name="First Device")
+    model = Models(size=8, length=800, width=480)
     session.add(setting)
+    session.add(model)
 
     session.commit()
     return "Done"
