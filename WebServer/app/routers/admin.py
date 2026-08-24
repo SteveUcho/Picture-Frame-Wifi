@@ -14,7 +14,8 @@ router = APIRouter(
 @router.get("/getDevices")
 def get_devices(session: SessionDep):
     devices = session.exec(select(Settings)).all()
-    dev_list = [device.id for device in devices]
+    # create list of devices with id and name
+    dev_list = [{"id": device.id, "name": device.name, "model": f"{device.size}in ESP32-S3"} for device in devices]
     return dev_list
 
 

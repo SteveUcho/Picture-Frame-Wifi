@@ -3,7 +3,7 @@ import "../styles/index.css";
 import { Separator, Surface } from "@heroui/react";
 
 import { CustomForm } from "../components/CustomForm.tsx";
-import { DevicePicker, demoDevices } from "../components/DevicePicker.tsx";
+import { DevicePicker } from "../components/DevicePicker.tsx";
 import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
 ---
 
@@ -15,25 +15,14 @@ import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
     <div class="p-4 h-dvh flex gap-4 max-w-3xl mx-auto">
       <Surface className="w-fit rounded-xl p-2">
         <div class="flex justify-between items-center p-2">
-          <h1 class="text-xl font-bold">Frames</h1>
+          <h1 class="text-xl font-bold mr-4">Frames</h1>
           <DarkModeToggle client:idle />
         </div>
         <Separator />
-        <DevicePicker client:idle devices={demoDevices} className="mt-2" />
+        <DevicePicker client:load className="mt-2" />
       </Surface>
       <Surface className="p-8 flex-1 rounded-xl flex flex-col h-full">
-        <div
-          class="mb-2 rounded-md dark:bg-default p-4 border border-warning text-sm"
-        >
-          <p class="text-warning">
-            <span class="font-bold">Attention: </span>Connect to Frame
-          </p>
-          <p>
-            To configure your picture frame you must connect to the same WiFi
-            network
-          </p>
-        </div>
-        <CustomForm client:idle submitURL="/admin/setSettings/:deviceId" />
+        <CustomForm client:idle submitURL="/admin/setDeviceSettings/:deviceId" />
       </Surface>
     </div>
   </body>
