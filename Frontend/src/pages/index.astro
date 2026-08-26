@@ -22,7 +22,7 @@ import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
         <DevicePicker client:load className="mt-2" />
       </Surface>
       <Surface className="p-8 flex-1 rounded-xl flex flex-col h-full">
-        <CustomForm client:idle submitURL="/admin/setDeviceSettings/:deviceId" />
+        <CustomForm client:idle submitURL="/admin/setDeviceSettings/:deviceId" fetchURL="/admin/getDeviceSettings/:deviceId" />
       </Surface>
     </div>
   </body>

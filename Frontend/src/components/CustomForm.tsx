@@ -1,33 +1,58 @@
 import { useAtomValue } from "jotai";
 import { urlVarsAtom } from "../utils/atoms";
-import { Form, TextField, Label, Input, FieldError, Description, Button, ScrollShadow, Select, ListBox, type Key } from "@heroui/react";
-import { fetchWithBackend } from "../utils/fetch";
+import { Form, TextField, Label, Input, FieldError, Description, Button, ScrollShadow, Select, ListBox, type Key, Spinner } from "@heroui/react";
+import { fetchWithBackend, generateUrl, swrFetcher } from "../utils/fetch";
 import { useState } from "react";
+import useSWR from "swr";
 
 interface CustomFormProps {
   submitURL: string;
+  fetchURL: string;
+}
+
+interface FormData {
+  "id"?: number;
+  "name"?: string;
+  "sleepInterval"?: string;
+  "orientation"?: "horizontal" | "vertical";
+  "size"?: number;
 }
 
 export function CustomForm(props: Readonly<CustomFormProps>) {
-  const { submitURL } = props;
+  const { submitURL, fetchURL } = props;
   const urlVars = useAtomValue(urlVarsAtom);
-  const [formState, setFormState] = useState<Record<string, string | number>>({});
-  // TODO: Get current form state from backend
+  const { data, isLoading, error, mutate } = useSWR<FormData>(generateUrl(fetchURL, urlVars), swrFetcher)
+  const [formState, setFormState] = useState<FormData>({});
 
   const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    let apiPath = submitURL;
-    for (const [key, value] of Object.entries(urlVars)) {
-      apiPath = apiPath.replace(`:${key}`, value);
+    const apiPath = generateUrl(submitURL, urlVars);
+    if (!apiPath) return;
+    const newData = { ...data, ...formState }
+    const options = {
+      optimisticData: newData,
+      rollbackOnError: (error: unknown) => {
+        // If it's timeout abort error, don't rollback
+        setFormState({ ...formState });
+        return error instanceof Error && error.name !== 'AbortError'
+      },
     }
-    fetchWithBackend(apiPath, {
-      method: "POST",
-      body: JSON.stringify(formState)
-    });
-    console.log(apiPath, formState);
+
+    mutate(async () => {
+      const res = await fetchWithBackend(apiPath, {
+        method: "POST",
+        body: JSON.stringify(formState)
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to update data');
+      }
+      return newData;
+    }, options);
+    setFormState({});
   };
 
-  const handleKeyChange = (key: string, initial: Key | null) => (value: Key | null) => {
+  const handleKeyChange = (key: keyof FormData, initial: Key) => (value: Key | null) => {
     if (value === null || value === initial) {
       const newFormState = { ...formState };
       delete newFormState[key];
@@ -40,16 +65,30 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
     }
   };
 
-  // TODO: Submit pull request to move heroui from using deprecated React.FormEvent to React.SubmitEvent
   return (
     <>
       {
         !urlVars.deviceId && (
-          <div className="absolute flex items-center justify-center bg-gray-800/80 z-10 h-full w-full -m-8 rounded-xl">
+          <div className="absolute flex items-center justify-center bg-default/80 z-10 h-full w-full -m-8 rounded-xl">
             <p>Please select a device first</p>
           </div>
         )
       }
+      {
+        isLoading && (
+          <div className="absolute flex items-center justify-center bg-default-800/80 z-10 h-full w-full -m-8 rounded-xl">
+            <Spinner />
+          </div>
+        )
+      }
+      {
+        error && (
+          <div className="absolute flex items-center justify-center bg-red-600/70 z-10 h-full w-full -m-8 rounded-xl">
+            <p>Error: {error?.message}</p>
+          </div>
+        )
+      }
+      {/* TODO: Submit pull request to move heroui from using deprecated React.FormEvent to React.SubmitEvent to remove any type assertions */}
       <Form
         className="flex flex-col gap-2 w-full flex-1 min-h-0"
         onSubmit={handleSubmit as any}
@@ -59,8 +98,8 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
             name="sleepInterval"
             type="text"
             variant="secondary"
-            value={formState.sleepInterval as string || ""}
-            onChange={handleKeyChange("sleepInterval", "")}
+            value={formState.sleepInterval || data?.sleepInterval || ""}
+            onChange={handleKeyChange("sleepInterval", data?.sleepInterval || "")}
           >
             <Label>Sleep Interval</Label>
             <Input
@@ -74,8 +113,8 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
             name="orientation"
             placeholder="Select orientation"
             variant="secondary"
-            value={formState.orientation || ""}
-            onChange={handleKeyChange("orientation", "")}
+            value={formState.orientation || data?.orientation || ""}
+            onChange={handleKeyChange("orientation", data?.orientation || "")}
           >
             <Label>Orientation</Label>
             <Select.Trigger>
@@ -98,11 +137,10 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
           </Select>
         </ScrollShadow>
         <div className="flex gap-2">
-          {/* TODO: Add loading state + error handling + success feedback + fade back to disabled after success */}
           <Button isDisabled={!Object.keys(formState).length} type="submit" className="flex-1">
             Submit
           </Button>
-          <Button type="reset" variant="secondary">
+          <Button type="button" variant="secondary" onPress={() => setFormState({})}>
             Reset
           </Button>
         </div>
