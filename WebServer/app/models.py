@@ -20,6 +20,7 @@ OrientationType = Literal["horizontal", "vertical"]
 
 
 class SettingInput(BaseModel):
+    name: str | None = Field(default=None, title="set current name of frame")
     sleepInterval: str | None = Field(
         default=None,
         title="sleepInterval in HH:MM:SS",
