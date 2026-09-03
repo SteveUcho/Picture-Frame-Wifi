@@ -95,6 +95,20 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
       >
         <ScrollShadow className="flex flex-col gap-2 flex-1">
           <TextField
+            name="name"
+            type="text"
+            variant="secondary"
+            value={formState.name || data?.name || ""}
+            onChange={handleKeyChange("name", data?.name || "")}
+          >
+            <Label>Name</Label>
+            <Input
+              placeholder="Frame Name"
+            />
+            <Description>Set the name of the frame</Description>
+            <FieldError />
+          </TextField>
+          <TextField
             name="sleepInterval"
             type="text"
             variant="secondary"

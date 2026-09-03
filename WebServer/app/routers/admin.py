@@ -31,17 +31,15 @@ def get_device_settings(device_id: DeviceIdType, session: SessionDep):
 @router.post("/setDeviceSettings/{device_id}")
 def set_device_settings(
     device_id: DeviceIdType,
-    new_settings: Annotated[SettingInput, Body()],
+    settings_input: Annotated[SettingInput, Body()],
     session: SessionDep,
 ):
     current_settings = session.get(Settings, device_id)
     if not current_settings:
         raise HTTPException(status_code=404, detail="Settings not found")
-    if new_settings.sleepInterval:
-        current_settings.sleepInterval = new_settings.sleepInterval
-    if new_settings.orientation:
-        current_settings.orientation = new_settings.orientation
 
-    session.add(current_settings)
+    for key, value in settings_input.model_dump(exclude_unset=True).items():
+        setattr(current_settings, key, value)
+
     session.commit()
     return "Done"
