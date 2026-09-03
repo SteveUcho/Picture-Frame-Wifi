@@ -1,8 +1,6 @@
 import { Avatar, Description, Label, ListBox, type Selection } from "@heroui/react";
 import { urlVarsAtom } from "../utils/atoms";
 import { useAtom } from "jotai";
-import { useEffect, useState } from "react";
-import { fetchWithBackend } from "../utils/fetch";
 
 interface Device {
   id: string;
@@ -10,19 +8,13 @@ interface Device {
   model: string;
 }
 
-export function DevicePicker(props: Readonly<React.ComponentProps<typeof ListBox>>) {
-  const { className, ...otherProps } = props;
-  const [devices, setDevices] = useState<Device[]>([{ id: "loading", name: "Loading...", model: "" }]);
-  const [urlVars, setUrlVars] = useAtom(urlVarsAtom);
+interface DevicePickerProps extends React.ComponentProps<typeof ListBox> {
+  devices: Device[];
+}
 
-  useEffect(() => {
-    // get devices from backend
-    fetchWithBackend("/admin/getDevices")
-      .then((response) => response.json())
-      .then((data) => {
-        setDevices(data);
-      });
-  }, []);
+export function DevicePicker(props: Readonly<DevicePickerProps>) {
+  const { className, devices, ...otherProps } = props;
+  const [urlVars, setUrlVars] = useAtom(urlVarsAtom);
 
   const handleSlected = (selection: Selection) => {
     const value = Array.from(selection)[0];

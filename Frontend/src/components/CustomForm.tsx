@@ -24,13 +24,14 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
   const { data, isLoading, error, mutate } = useSWR<FormData>(generateUrl(fetchURL, urlVars), swrFetcher)
   const [formState, setFormState] = useState<FormData>({});
 
+  const formData = { ...data, ...formState };
+
   const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
     const apiPath = generateUrl(submitURL, urlVars);
     if (!apiPath) return;
-    const newData = { ...data, ...formState }
     const options = {
-      optimisticData: newData,
+      optimisticData: formData,
       rollbackOnError: (error: unknown) => {
         // If it's timeout abort error, don't rollback
         setFormState({ ...formState });
@@ -47,13 +48,13 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
       if (!res.ok) {
         throw new Error('Failed to update data');
       }
-      return newData;
+      return formData;
     }, options);
     setFormState({});
   };
 
-  const handleKeyChange = (key: keyof FormData, initial: Key) => (value: Key | null) => {
-    if (value === null || value === initial) {
+  const handleKeyChange = (key: keyof FormData) => (value: Key | null) => {
+    if (value === null || value === data?.[key]) {
       const newFormState = { ...formState };
       delete newFormState[key];
       setFormState(newFormState);
@@ -98,8 +99,8 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
             name="name"
             type="text"
             variant="secondary"
-            value={formState.name || data?.name || ""}
-            onChange={handleKeyChange("name", data?.name || "")}
+            value={formData.name || ""}
+            onChange={handleKeyChange("name")}
           >
             <Label>Name</Label>
             <Input
@@ -112,8 +113,8 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
             name="sleepInterval"
             type="text"
             variant="secondary"
-            value={formState.sleepInterval || data?.sleepInterval || ""}
-            onChange={handleKeyChange("sleepInterval", data?.sleepInterval || "")}
+            value={formData.sleepInterval || ""}
+            onChange={handleKeyChange("sleepInterval")}
           >
             <Label>Sleep Interval</Label>
             <Input
@@ -127,8 +128,8 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
             name="orientation"
             placeholder="Select orientation"
             variant="secondary"
-            value={formState.orientation || data?.orientation || ""}
-            onChange={handleKeyChange("orientation", data?.orientation || "")}
+            value={formData.orientation || ""}
+            onChange={handleKeyChange("orientation")}
           >
             <Label>Orientation</Label>
             <Select.Trigger>
