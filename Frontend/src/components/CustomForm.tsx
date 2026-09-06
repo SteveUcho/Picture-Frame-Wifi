@@ -1,9 +1,10 @@
 import { useAtomValue } from "jotai";
-import { urlVarsAtom } from "../utils/atoms";
+import { toggleModalAtom, urlVarsAtom } from "../utils/atoms";
 import { Form, TextField, Label, Input, FieldError, Description, Button, ScrollShadow, Select, ListBox, type Key, Spinner } from "@heroui/react";
 import { fetchWithBackend, generateUrl, swrFetcher } from "../utils/fetch";
 import { useState } from "react";
 import useSWR from "swr";
+import { ToggleAtom } from "./ToggleAtom";
 
 interface CustomFormProps {
   submitURL: string;
@@ -151,6 +152,11 @@ export function CustomForm(props: Readonly<CustomFormProps>) {
             <Description>Options: horizontal, vertical</Description>
           </Select>
         </ScrollShadow>
+        <ToggleAtom atom={toggleModalAtom} toggleValue={{ id: "previewModal" }}>
+          <Button fullWidth type="button" variant="tertiary">
+            Preview
+          </Button>
+        </ToggleAtom>
         <div className="flex gap-2">
           <Button isDisabled={!Object.keys(formState).length} type="submit" className="flex-1">
             Submit
