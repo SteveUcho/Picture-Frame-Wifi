@@ -6,6 +6,7 @@ import { CustomForm } from "../components/CustomForm.tsx";
 import { DevicePicker } from "../components/DevicePicker.tsx";
 import { DarkModeToggle } from "../components/DarkModeToggle.tsx";
 import { fetchWithBackend } from "../utils/fetch";
+import { PreviewModal } from "../components/PreviewModal.tsx";
 
 const res = await fetchWithBackend("/admin/getDevices");
 const devices = await res.json();
@@ -29,5 +30,6 @@ const devices = await res.json();
         <CustomForm client:idle submitURL="/admin/setDeviceSettings/:deviceId" fetchURL="/admin/getDeviceSettings/:deviceId" />
       </Surface>
     </div>
+    <PreviewModal client:idle />
   </body>
 </html>
