@@ -31,31 +31,16 @@
 #ifndef __EPD_7IN3E_H_
 #define __EPD_7IN3E_H_
 
-#include "Debug.h"
+#include <span>
 #include "DEV_Config.h"
 
 // Display resolution
-#define EPD_7IN3E_WIDTH       800
-#define EPD_7IN3E_HEIGHT      480
+inline constexpr uint16_t EPD_7IN3E_WIDTH  = 800;
+inline constexpr uint16_t EPD_7IN3E_HEIGHT = 480;
 
-/**********************************
-Color Index
-**********************************/
-#define EPD_7IN3E_BLACK   0x0   /// 000
-#define EPD_7IN3E_WHITE   0x1   /// 001
-#define EPD_7IN3E_YELLOW  0x2   /// 010
-#define EPD_7IN3E_RED     0x3   /// 011
-// #define EPD_7IN3E_ORANGE  0x4   /// 100
-#define EPD_7IN3E_BLUE    0x5   /// 101
-#define EPD_7IN3E_GREEN   0x6   /// 110
-
-void EPD_7IN3E_Init(void);
-void EPD_7IN3E_Init_Fast(void);
-void EPD_7IN3E_Clear(UBYTE color);
-void EPD_7IN3E_Show7Block(void);
-void EPD_7IN3E_Show(void);
-void EPD_7IN3E_Display(UBYTE *Image);
-void EPD_7IN3E_DisplayPart(const UBYTE *Image, UWORD xstart, UWORD ystart, UWORD image_width, UWORD image_heigh);
+void EPD_7IN3E_Clear(void);
+void EPD_7IN3E_Display(std::span<const uint8_t> Image);
+void EPD_7IN3E_DisplayPart(UBYTE *Image, UWORD xstart, UWORD ystart, UWORD image_width, UWORD image_heigh);
 void EPD_7IN3E_Sleep(void);
 
 #endif

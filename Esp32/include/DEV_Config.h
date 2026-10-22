@@ -1,11 +1,11 @@
 /*****************************************************************************
 * | File      	:   DEV_Config.h
-* | Author      :   Waveshare team
+* | Author      :   Waveshare team, Steve Ucho
 * | Function    :   Hardware underlying interface
 * | Info        :
 *----------------
 * |	This version:   V1.0
-* | Date        :   2020-02-19
+* | Date        :   2026-10-21
 * | Info        :
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -38,9 +38,9 @@
 /**
  * data
 **/
-#define UBYTE   uint8_t
-#define UWORD   uint16_t
-#define UDOUBLE uint32_t
+using UBYTE   = uint8_t;
+using UWORD   = uint16_t;
+using UDOUBLE = uint32_t;
 
 /**
  * GPIO config
@@ -48,19 +48,20 @@
 
 // GPIO Right Side
   // also connected is pwr to 3.3v
-#define EPD_MOSI_PIN    D10
-#define EPD_SCK_PIN     D8
-#define EPD_PWR_PIN     D0
+inline constexpr UBYTE EPD_MOSI_PIN = D10;
+inline constexpr UBYTE EPD_SCK_PIN  = D8;
+inline constexpr UBYTE EPD_PWR_PIN  = D0;
 
 // GPIO Left Side
-#define EPD_CS_PIN      D3
-#define EPD_DC_PIN      D4
-#define EPD_RST_PIN     D5
-#define EPD_BUSY_PIN    D6
+inline constexpr UBYTE EPD_CS_PIN  = D3;
+inline constexpr UBYTE EPD_CS2_PIN = D2;
+inline constexpr UBYTE EPD_DC_PIN  = D4;
+inline constexpr UBYTE EPD_RST_PIN = D5;
+inline constexpr UBYTE EPD_BUSY_PIN = D6;
 
 // GPIO MISC
-#define GPIO_PIN_SET   1
-#define GPIO_PIN_RESET 0
+inline constexpr UBYTE GPIO_PIN_SET   = 1;
+inline constexpr UBYTE GPIO_PIN_RESET = 0;
 
 /**
  * GPIO read and write
@@ -78,7 +79,7 @@ UBYTE DEV_Module_Init(void);
 void DEV_GPIO_Init(void);
 void DEV_SPI_Init(void);
 
-void GPIO_Mode(UWORD GPIO_Pin, UWORD Mode);
+void GPIO_Mode(UBYTE GPIO_Pin, UBYTE Mode);
 void DEV_SPI_WriteByte(UBYTE data);
 void DEV_SPI_SendByte(UBYTE data);
 UBYTE DEV_SPI_ReadByte();

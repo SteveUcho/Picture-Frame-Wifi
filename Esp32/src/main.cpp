@@ -1,31 +1,23 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <span>
+#include <array>
 
-// #include "EPD_Test.h"
-#include "EPD_7in3e.h"
+#include "EPD_Core.h"
 
 #define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
 #define TIME_TO_SLEEP 30          /* Time ESP32 will go to sleep (in seconds) */
 
 RTC_DATA_ATTR int sleepInterval = 0; /* day of the month, used for checking if was powered off, and sets currentCycle */
 
-const char *WIFI_SSID = "MySpectrumWiFi8A-5G";
-const char *WIFI_PASS = "Flush20ing20";
-const char *serverUrl = "http://192.168.86.28:8080/getFrameBuffer/1"; // your FastAPI endpoint
-
-// const char *ntpServer = "pool.ntp.org";    // Or another reliable NTP server
-// const char *timeZone = "America/New_York"; // Example for Eastern Time, including DST rules
-
 // Frame size (must match server)
 const size_t FRAME_ROWS = 800;
 const size_t FRAME_COLS = 480;
 const size_t PIXEL_COUNT = FRAME_ROWS * FRAME_COLS;
-const size_t PACKED_SIZE = (PIXEL_COUNT + 1) / 2;       // two pixels per byte
+const size_t BUFFER_SIZE = (PIXEL_COUNT + 1) / 2; // two pixels per byte
 
 const size_t TIME_HEADER = 4;                           // 4 bytes - Days|Hours|Minutes|Seconds
-const size_t PAYLOAD_TOTAL = TIME_HEADER + PACKED_SIZE; // total payload size, headers + image data
-
-uint8_t *packedBuffer = nullptr;
+const size_t PAYLOAD_TOTAL = TIME_HEADER + BUFFER_SIZE; // total payload size, headers + image data
 
 /*
 Method to print the reason by which ESP32
@@ -78,13 +70,12 @@ void initWiFi()
     Serial.println(WiFi.localIP());
 }
 
-bool fetchPackets(uint8_t *imgBuf, size_t imgSize)
+bool fetchPackets(std::span<uint8_t> imgBuf)
 {
     HTTPClient http;
-    http.begin(serverUrl);
+    http.begin(SERVER_URL);
 
-    int httpCode = http.GET();
-    if (httpCode != HTTP_CODE_OK)
+    if (int httpCode = http.GET(); httpCode != HTTP_CODE_OK)
     {
         Serial.printf("HTTP GET failed, code %d\n", httpCode);
         http.end();
@@ -92,10 +83,9 @@ bool fetchPackets(uint8_t *imgBuf, size_t imgSize)
     }
 
     WiFiClient *stream = http.getStreamPtr();
-    size_t received = 0;
 
     int newSleepTime = 0;
-    int toSeconds[] = {3600, 60, 1};
+    std::array<uint16_t, 3> toSeconds = {3600, 60, 1};
     for (size_t i = 0; i < 3; i++)
     {
         if (stream->available())
@@ -112,7 +102,8 @@ bool fetchPackets(uint8_t *imgBuf, size_t imgSize)
     }
     sleepInterval = newSleepTime;
 
-    while (http.connected() && received < imgSize)
+    size_t received = 0;
+    while (http.connected() && received < BUFFER_SIZE)
     {
         if (stream->available())
         {
@@ -128,66 +119,41 @@ bool fetchPackets(uint8_t *imgBuf, size_t imgSize)
     }
 
     http.end();
-    return received == imgSize;
+    return received == BUFFER_SIZE;
 }
 
-void doAllScreenStuff(uint8_t *buffer)
+void doAllScreenStuff(std::span<const uint8_t> buffer)
 {
-    Debug("Apply Power To Display");
+    Serial.print("Apply Power To Display");
     if (DEV_Module_Init() != 0)
     {
         return;
     }
 
-    Debug("e-Paper Init and Clear...\r\n");
-    EPD_7IN3E_Init();
-    // Debug("about to clear image\r\n");
-    // EPD_7IN3E_Clear(EPD_7IN3E_WHITE); // WHITE
-    // DEV_Delay_ms(1000);
-
-    Debug("Display Real Image\r\n");
+    Serial.print("Display Image\r\n");
     EPD_7IN3E_Display(buffer);
 
-    Debug("Put Display to Sleep...\r\n");
+    Serial.print("Put Display to Sleep...\r\n");
     EPD_7IN3E_Sleep();
-    free(buffer);
-    buffer = NULL;
     delay(2000); // important, at least 2s
+
     // close 5V
-    // Debug("close 5V, Module enters 0 power consumption ...\r\n");
+    // Serial.print("close 5V, Module enters 0 power consumption ...\r\n");
     // DEV_Module_Exit();
 }
 
 void setup()
 {
     Serial.begin(115200);
-    // delay(2000);
 
     // Print the wakeup reason for ESP32
     // print_wakeup_reason();
 
     initWiFi();
 
-    packedBuffer = (uint8_t *)malloc(PAYLOAD_TOTAL);
-    if (!packedBuffer)
-    {
-        Serial.println("Failed to allocate buffer!");
-        while (1)
-            delay(1000);
-    }
-
-    if (fetchPackets(packedBuffer, PACKED_SIZE)) // only retrieve image data from buffer
+    if (static std::array<uint8_t, BUFFER_SIZE> packedBuffer; fetchPackets(packedBuffer)) // only retrieve image data from buffer
     {
         Serial.println("Got packed buffer!");
-        // Serial.print("First 16 packed bytes: ");
-        // for (int i = 0; i < 16 && i < PACKED_SIZE; i++)
-        // {
-        //     Serial.print(packedBuffer[i]);
-        // }
-        // Serial.println();
-        // Serial.print("sleep interval: ");
-        // Serial.println(sleepInterval);
-        // Serial.println();
 
         // init display, display image, display go to sleep
         doAllScreenStuff(packedBuffer);
