@@ -1,11 +1,11 @@
 /*****************************************************************************
 * | File      	:   DEV_Config.c
-* | Author      :   Waveshare team
+* | Author      :   Waveshare team, Steve Ucho
 * | Function    :   Hardware underlying interface
 * | Info        :
 *----------------
-* |	This version:   V1.0
-* | Date        :   2020-02-19
+* |	This version:   V1.1
+* | Date        :   2026-10-21
 * | Info        :
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -35,13 +35,18 @@ void GPIO_Config(void)
     pinMode(EPD_RST_PIN , OUTPUT);
     pinMode(EPD_DC_PIN  , OUTPUT);
     pinMode(EPD_PWR_PIN , OUTPUT);
+    
+    pinMode(EPD_SCK_PIN, OUTPUT);
+    pinMode(EPD_MOSI_PIN, OUTPUT);
     pinMode(EPD_CS_PIN  , OUTPUT);
+    pinMode(EPD_CS2_PIN , OUTPUT);
 
     // digitalWrite(EPD_PWR_PIN , HIGH);
     digitalWrite(EPD_CS_PIN , HIGH);
+    digitalWrite(EPD_CS2_PIN , HIGH);
 }
 
-void GPIO_Mode(UWORD GPIO_Pin, UWORD Mode)
+void GPIO_Mode(UBYTE GPIO_Pin, UBYTE Mode)
 {
     if(Mode == 0) {
         pinMode(GPIO_Pin , INPUT);
