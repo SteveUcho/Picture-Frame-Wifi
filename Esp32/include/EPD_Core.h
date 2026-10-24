@@ -35,7 +35,7 @@
 #include "DEV_Config.h"
 
 // Display resolution
-inline constexpr uint16_t EPD_7IN3E_WIDTH  = 800;
+inline constexpr uint16_t EPD_7IN3E_WIDTH = 800;
 inline constexpr uint16_t EPD_7IN3E_HEIGHT = 480;
 
 void EPD_7IN3E_Clear(void);

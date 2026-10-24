@@ -32,14 +32,27 @@ static void EPD_SendCommand(UBYTE Command, UBYTE CS_PIN)
 static void EPD_SendCommand(UBYTE Command, UBYTE CS_PIN, std::span<const uint8_t> data)
 {
     DEV_Digital_Write(EPD_DC_PIN, 0);
-    DEV_Digital_Write(CS_PIN, 0);
+    if (CS_PIN & EPD_CS_PIN != 0)
+    {
+        DEV_Digital_Write(EPD_CS_PIN, 0);
+    }
+#ifdef EPD_E133
+    if (CS_PIN & EPD_CS2_PIN != 0)
+    {
+        DEV_Digital_Write(EPD_CS2_PIN, 0);
+    }
+#endif
     Serial.println("Send command " + (String)Command);
     DEV_SPI_WriteByte(Command);
     DEV_Digital_Write(EPD_DC_PIN, 1);
-    for (uint8_t byte : data) {
+    for (uint8_t byte : data)
+    {
         DEV_SPI_WriteByte(byte);
     }
-    DEV_Digital_Write(CS_PIN, 1);
+    DEV_Digital_Write(EPD_CS_PIN, 1);
+#ifdef EPD_E133
+    DEV_Digital_Write(EPD_CS2_PIN, 1);
+#endif
 }
 
 /******************************************************************************
@@ -69,8 +82,11 @@ static void EPD_BusyWait(void)
     Serial.print("e-Paper busy wait release\r\n");
 }
 
+#ifdef EPD_E133
 /******************************************************************************
-*/
+function :  Wait until it goes from HIGH to LOW to HIGH
+parameter:
+******************************************************************************/
 static void EPD_RefreshWait(void)
 {
     Serial.print("e-Paper Refresh Begin\r\n");
@@ -86,6 +102,7 @@ static void EPD_RefreshWait(void)
     }
     Serial.print("e-Paper Refresh End Wait release\r\n");
 }
+#endif
 
 /******************************************************************************
 function :  Turn On Display
@@ -100,12 +117,14 @@ static void EPD_7IN3E_TurnOnDisplay(void)
 
     Serial.print("debug: turnon: send second command\r\n");
 
-    EPD_SendCommand(0x06, EPD_CS_PIN, std::array<uint8_t, 4> {0x6F, 0x1F, 0x17, 0x49});
+#ifdef EPD_E73
+    EPD_SendCommand(0x06, EPD_CS_PIN, std::array<uint8_t, 4>{0x6F, 0x1F, 0x17, 0x49});
+#endif
 
-    EPD_SendCommand(0x12, EPD_CS_PIN, std::array<uint8_t, 1> {0x00}); // DISPLAY_REFRESH
+    EPD_SendCommand(0x12, EPD_CS_PIN & EPD_CS2_PIN, std::array<uint8_t, 1>{0x00}); // DISPLAY_REFRESH
     EPD_BusyWait();
 
-    EPD_SendCommand(0x02, EPD_CS_PIN, std::array<uint8_t, 1> {0x00}); // POWER_OFF
+    EPD_SendCommand(0x02, EPD_CS_PIN & EPD_CS2_PIN, std::array<uint8_t, 1>{0x00}); // POWER_OFF
     EPD_BusyWait();
 }
 
@@ -119,22 +138,22 @@ static void EPD_7IN3E_Init(void)
     EPD_BusyWait();
     DEV_Delay_ms(30);
 
-    EPD_SendCommand(0xAA, EPD_CS_PIN, std::array<uint8_t, 6> {0x49, 0x55, 0x20, 0x08, 0x09, 0x18}); // CMDH
-    EPD_SendCommand(0x01, EPD_CS_PIN, std::array<uint8_t, 1> {0x3F}); //
-    EPD_SendCommand(0x00, EPD_CS_PIN, std::array<uint8_t, 2> {0x5F, 0x69});
+    EPD_SendCommand(0xAA, EPD_CS_PIN, std::array<uint8_t, 6>{0x49, 0x55, 0x20, 0x08, 0x09, 0x18}); // CMDH
+    EPD_SendCommand(0x01, EPD_CS_PIN, std::array<uint8_t, 1>{0x3F});                               //
+    EPD_SendCommand(0x00, EPD_CS_PIN, std::array<uint8_t, 2>{0x5F, 0x69});
 
-    EPD_SendCommand(0x05, EPD_CS_PIN, std::array<uint8_t, 4> {0x40, 0x1F, 0x1F, 0x2C});
-    EPD_SendCommand(0x08, EPD_CS_PIN, std::array<uint8_t, 4> {0x6F, 0x1F, 0x1F, 0x22});
-    EPD_SendCommand(0x06, EPD_CS_PIN, std::array<uint8_t, 4> {0x6F, 0x1F, 0x17, 0x49});
+    EPD_SendCommand(0x05, EPD_CS_PIN, std::array<uint8_t, 4>{0x40, 0x1F, 0x1F, 0x2C});
+    EPD_SendCommand(0x08, EPD_CS_PIN, std::array<uint8_t, 4>{0x6F, 0x1F, 0x1F, 0x22});
+    EPD_SendCommand(0x06, EPD_CS_PIN, std::array<uint8_t, 4>{0x6F, 0x1F, 0x17, 0x49});
 
-    EPD_SendCommand(0x03, EPD_CS_PIN, std::array<uint8_t, 4> {0x00, 0x54, 0x00, 0x44});
-    EPD_SendCommand(0x60, EPD_CS_PIN, std::array<uint8_t, 2> {0x02, 0x00});
-    EPD_SendCommand(0x30, EPD_CS_PIN, std::array<uint8_t, 1> {0x03});
-    EPD_SendCommand(0x50, EPD_CS_PIN, std::array<uint8_t, 1> {0x3F});
-    EPD_SendCommand(0x61, EPD_CS_PIN, std::array<uint8_t, 4> {0x03, 0x20, 0x01, 0xE0});
-    EPD_SendCommand(0xE3, EPD_CS_PIN, std::array<uint8_t, 1> {0x2F});
+    EPD_SendCommand(0x03, EPD_CS_PIN, std::array<uint8_t, 4>{0x00, 0x54, 0x00, 0x44});
+    EPD_SendCommand(0x60, EPD_CS_PIN, std::array<uint8_t, 2>{0x02, 0x00});
+    EPD_SendCommand(0x30, EPD_CS_PIN, std::array<uint8_t, 1>{0x03});
+    EPD_SendCommand(0x50, EPD_CS_PIN, std::array<uint8_t, 1>{0x3F});
+    EPD_SendCommand(0x61, EPD_CS_PIN, std::array<uint8_t, 4>{0x03, 0x20, 0x01, 0xE0});
+    EPD_SendCommand(0xE3, EPD_CS_PIN, std::array<uint8_t, 1>{0x2F});
 
-    EPD_SendCommand(0x84, EPD_CS_PIN, std::array<uint8_t, 1> {0x01});
+    EPD_SendCommand(0x84, EPD_CS_PIN, std::array<uint8_t, 1>{0x01});
 }
 
 /******************************************************************************
