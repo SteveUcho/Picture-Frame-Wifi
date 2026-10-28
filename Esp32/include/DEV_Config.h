@@ -37,45 +37,45 @@
 
 /**
  * data
-**/
-using UBYTE   = uint8_t;
-using UWORD   = uint16_t;
+ **/
+using UBYTE = uint8_t;
+using UWORD = uint16_t;
 using UDOUBLE = uint32_t;
 
 /**
  * GPIO config
-**/
+ **/
 
 // GPIO Right Side
-  // also connected is pwr to 3.3v
+// also connected is pwr to 3.3v
 inline constexpr UBYTE EPD_MOSI_PIN = D10;
-inline constexpr UBYTE EPD_SCK_PIN  = D8;
-inline constexpr UBYTE EPD_PWR_PIN  = D0;
+inline constexpr UBYTE EPD_SCK_PIN = D8;
+inline constexpr UBYTE EPD_LED_PIN = D0;
 
 // GPIO Left Side
-inline constexpr UBYTE EPD_CS_PIN  = D3;
+inline constexpr UBYTE EPD_CS_PIN = D3;
 inline constexpr UBYTE EPD_CS2_PIN = D2;
-inline constexpr UBYTE EPD_DC_PIN  = D4;
+inline constexpr UBYTE EPD_DC_PIN = D4;
 inline constexpr UBYTE EPD_RST_PIN = D5;
 inline constexpr UBYTE EPD_BUSY_PIN = D6;
 
 // GPIO MISC
-inline constexpr UBYTE GPIO_PIN_SET   = 1;
+inline constexpr UBYTE GPIO_PIN_SET = 1;
 inline constexpr UBYTE GPIO_PIN_RESET = 0;
 
 /**
  * GPIO read and write
-**/
-#define DEV_Digital_Write(_pin, _value) digitalWrite(_pin, _value == 0? LOW:HIGH)
+ **/
+#define DEV_Digital_Write(_pin, _value) digitalWrite(_pin, _value == 0 ? LOW : HIGH)
 #define DEV_Digital_Read(_pin) digitalRead(_pin)
 
 /**
  * delay x ms
-**/
+ **/
 #define DEV_Delay_ms(__xms) delay(__xms)
 
 /*------------------------------------------------------------------------------------------------------*/
-UBYTE DEV_Module_Init(void);
+void DEV_Module_Init(void);
 void DEV_GPIO_Init(void);
 void DEV_SPI_Init(void);
 

@@ -31,53 +31,71 @@
 
 void GPIO_Config(void)
 {
-    pinMode(EPD_BUSY_PIN,  INPUT);
-    pinMode(EPD_RST_PIN , OUTPUT);
-    pinMode(EPD_DC_PIN  , OUTPUT);
-    pinMode(EPD_PWR_PIN , OUTPUT);
-    
+#ifdef EPD_E73
+    pinMode(EPD_BUSY_PIN, INPUT);
+#elif EPD_E133
+    pinMode(EPD_BUSY_PIN, INPUT_PULLUP);
+#endif
+    pinMode(EPD_RST_PIN, OUTPUT);
+    pinMode(EPD_DC_PIN, OUTPUT);
+#ifdef EPD_E133
+    pinMode(EPD_LED_PIN, OUTPUT);
+#endif
+
     pinMode(EPD_SCK_PIN, OUTPUT);
     pinMode(EPD_MOSI_PIN, OUTPUT);
-    pinMode(EPD_CS_PIN  , OUTPUT);
-    pinMode(EPD_CS2_PIN , OUTPUT);
+    pinMode(EPD_CS_PIN, OUTPUT);
+#ifdef EPD_E133
+    pinMode(EPD_CS2_PIN, OUTPUT);
+#endif
 
-    // digitalWrite(EPD_PWR_PIN , HIGH);
-    digitalWrite(EPD_CS_PIN , HIGH);
-    digitalWrite(EPD_CS2_PIN , HIGH);
+    digitalWrite(EPD_RST_PIN, HIGH);
+
+    digitalWrite(EPD_CS_PIN, HIGH);
+#ifdef EPD_E133
+    digitalWrite(EPD_CS2_PIN, HIGH);
+#endif
 }
 
 void GPIO_Mode(UBYTE GPIO_Pin, UBYTE Mode)
 {
-    if(Mode == 0) {
-        pinMode(GPIO_Pin , INPUT);
-	} else {
-		pinMode(GPIO_Pin , OUTPUT);
-	}
+    if (Mode == 0)
+    {
+        pinMode(GPIO_Pin, INPUT);
+    }
+    else
+    {
+        pinMode(GPIO_Pin, OUTPUT);
+    }
 }
 /******************************************************************************
 function:	Module Initialize, the BCM2835 library and initialize the pins, SPI protocol
 parameter:
 Info:
 ******************************************************************************/
-UBYTE DEV_Module_Init(void)
+void DEV_Module_Init(void)
 {
-	//gpio
-	GPIO_Config();
+    // gpio
+    GPIO_Config();
 
-	//serial printf
-	Serial.begin(115200);
+    // serial printf
+    Serial.begin(115200);
 
-	// spi
-	SPI.begin();
-    SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
-
-	return 0;
+    // spi
+    SPI.begin();
+    SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
 }
 
+void DEV_Module_Exit(void)
+{
+    digitalWrite(EPD_RST_PIN, LOW);
+    SPI.endTransaction();
+    SPI.end();
+}
 
 void DEV_GPIO_Init(void)
 {
-    SPI.end(); 
+    SPI.end();
     pinMode(EPD_SCK_PIN, OUTPUT);
     pinMode(EPD_MOSI_PIN, OUTPUT);
 }
@@ -88,10 +106,9 @@ void DEV_SPI_Init(void)
     SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 }
 
-
 /******************************************************************************
 function:
-			SPI read and write
+            SPI read and write
 ******************************************************************************/
 void DEV_SPI_WriteByte(UBYTE data)
 {
@@ -110,11 +127,13 @@ void DEV_SPI_SendByte(UBYTE data)
     digitalWrite(EPD_CS_PIN, GPIO_PIN_RESET);
     for (int i = 0; i < 8; i++)
     {
-        if ((data & 0x80) == 0) digitalWrite(EPD_MOSI_PIN, GPIO_PIN_RESET); 
-        else                    digitalWrite(EPD_MOSI_PIN, GPIO_PIN_SET);
+        if ((data & 0x80) == 0)
+            digitalWrite(EPD_MOSI_PIN, GPIO_PIN_RESET);
+        else
+            digitalWrite(EPD_MOSI_PIN, GPIO_PIN_SET);
 
         data <<= 1;
-        digitalWrite(EPD_SCK_PIN, GPIO_PIN_SET);     
+        digitalWrite(EPD_SCK_PIN, GPIO_PIN_SET);
         digitalWrite(EPD_SCK_PIN, GPIO_PIN_RESET);
     }
     digitalWrite(EPD_CS_PIN, GPIO_PIN_SET);
@@ -122,28 +141,21 @@ void DEV_SPI_SendByte(UBYTE data)
 
 UBYTE DEV_SPI_ReadByte()
 {
-    UBYTE j=0xff;
+    UBYTE j = 0xff;
     GPIO_Mode(EPD_MOSI_PIN, INPUT);
     digitalWrite(EPD_CS_PIN, GPIO_PIN_RESET);
     for (int i = 0; i < 8; i++)
     {
         j = j << 1;
-        if (digitalRead(EPD_MOSI_PIN))  j = j | 0x01;
-        else                            j = j & 0xfe;
-        
-        digitalWrite(EPD_SCK_PIN, GPIO_PIN_SET);     
+        if (digitalRead(EPD_MOSI_PIN))
+            j = j | 0x01;
+        else
+            j = j & 0xfe;
+
+        digitalWrite(EPD_SCK_PIN, GPIO_PIN_SET);
         digitalWrite(EPD_SCK_PIN, GPIO_PIN_RESET);
     }
     digitalWrite(EPD_CS_PIN, GPIO_PIN_SET);
     GPIO_Mode(EPD_MOSI_PIN, 1);
     return j;
 }
-
-
-
-
-void DEV_Module_Exit(void)
-{
-    digitalWrite(EPD_PWR_PIN , LOW);
-}
-

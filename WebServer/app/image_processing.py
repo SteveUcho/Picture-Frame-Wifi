@@ -1,54 +1,33 @@
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from app.models import ScanOrientationType
+
 from .constants import SATURATED_PALETTE, DESATURATED_PALETTE
 from .image_utils import get_location_text, get_date_text
 
-def rotate_image(image):
-    width, height = image.size
-    if height > width:
-        return image.rotate(90)
-    else:
-        return image.rotate(180)
 
-
-def resize_and_truncate(image, frame_size):
+def resize_and_truncate(image: Image.Image, frame_size: tuple[int, int]):
     """Resize the image to fit the target size and truncate symmetrically"""
+    target_width = frame_size[1]
+    if image.width > image.height:
+        target_width = frame_size[0]
     # Calculate the aspect ratio
-    aspect_ratio = image.width / image.height
-    target_aspect_ratio = frame_size[0] / frame_size[1]
+    # Calculate the new height using the original proportions
+    percentage = target_width / float(image.width)
+    target_height = int(image.height * percentage)
 
-    # Resize the image proportionally
-    if aspect_ratio > target_aspect_ratio:
-        # Resize by height and then truncate the width symmetrically
-        resized_image = image.resize(
-            (int(frame_size[1] * aspect_ratio), frame_size[1]), Image.LANCZOS
-        )
-        left_margin = (resized_image.width - frame_size[0]) // 2
-        right_margin = (resized_image.width - frame_size[0] + 1) // 2
-        top_margin = 0
-        bottom_margin = 0
-
-    else:
-        # Resize by width and then truncate the height symmetrically
-        resized_image = image.resize(
-            (frame_size[0], int(frame_size[0] / aspect_ratio)), Image.LANCZOS
-        )
-        left_margin = 0
-        right_margin = 0
-        top_margin = (resized_image.height - frame_size[1]) // 2
-        bottom_margin = (resized_image.height - frame_size[1] + 1) // 2
-
-    # Truncate symmetrically from both sides to fit the target size
-    truncated_image = resized_image.crop(
-        (
-            left_margin,
-            top_margin,
-            resized_image.width - right_margin,
-            resized_image.height - bottom_margin,
-        )
+    # Resize proportionally
+    scaled_image = image.resize(
+        (target_width, target_height), resample=Image.Resampling.LANCZOS
     )
+
+    if image.width > image.height:
+        truncated_image = scaled_image.crop((0, 0, frame_size[0], frame_size[1]))
+    else:
+        truncated_image = scaled_image.crop((0, 0, frame_size[1], frame_size[0]))
     return truncated_image
+
 
 def palette_blend(saturation, dtype="uint8"):
     saturation = float(saturation)
@@ -75,26 +54,11 @@ def process_image(image_path, frame_size):
     image = resize_and_truncate(image, frame_size)
     first_line, second_line = get_draw_text(image, image_path)
     image = add_text_to_image(image, frame_size, first_line, second_line)
-    image = finalize_image(image, saturation)
+    image = epaper_quantize(image, saturation)
     return image
 
-    # if image.mode == "P":
-    #     # Create a pure colour palette from DESATURATED_PALETTE
-    #     palette = np.array(DESATURATED_PALETTE, dtype=np.uint8).flatten().tobytes()
-    #     palette_image.putpalette(palette)
 
-    #     # Assume that palette mode images with an unset palette use the
-    #     # default colour order and "DESATURATED_PALETTE" pure colours
-    #     if not image.palette.colors:
-    #         image.putpalette(palette)
-
-    #     # Assume that palette mode images with exactly six colours use
-    #     # all the correct colours, but not exactly in the right order.
-    #     if len(image.palette.colors) == 6:
-    #         dither = Image.Dither.NONE
-    # else:
-
-def get_draw_text(image, image_path):
+def get_draw_text(image: Image.Image, image_path: str) -> tuple[str, str]:
     exif_data = image.getexif()
     first_line = get_location_text(exif_data)
     name_text = image_path.split("/")[2].split("U")[0]
@@ -112,7 +76,8 @@ def add_text_to_image(image, frame_size, first_line, second_line):
     image.paste(text_image, image_anchor, text_image)
     return image
 
-def finalize_image(image, saturation=0.5):
+
+def epaper_quantize(image, saturation=0.5):
     # Image size doesn't matter since it's just the palette we're using
     palette_image = Image.new("P", (1, 1))
 
@@ -120,9 +85,10 @@ def finalize_image(image, saturation=0.5):
     palette_image.putpalette(palette)
 
     dither = Image.Dither.FLOYDSTEINBERG
-    image_complete = image.convert("RGB").quantize(6, palette=palette_image, dither=dither)
+    image_complete = image.convert("RGB").quantize(
+        6, palette=palette_image, dither=dither
+    )
     return image_complete
-
 
 
 def draw_text(first_line, second_line, max_length):
@@ -140,9 +106,25 @@ def draw_text(first_line, second_line, max_length):
     drawing = ImageDraw.Draw(text_image)
 
     # draw first line
-    drawing.text((0, 0), first_line, font=fnt1, fill=(255, 255, 255, 255), anchor="lt", stroke_width=2, stroke_fill="black")
+    drawing.text(
+        (0, 0),
+        first_line,
+        font=fnt1,
+        fill=(255, 255, 255, 255),
+        anchor="lt",
+        stroke_width=2,
+        stroke_fill="black",
+    )
     # draw second line
-    drawing.text((0, 40), second_line, font=fnt2, fill=(255, 255, 255, 255), anchor="lt", stroke_width=2, stroke_fill="black")
+    drawing.text(
+        (0, 40),
+        second_line,
+        font=fnt2,
+        fill=(255, 255, 255, 255),
+        anchor="lt",
+        stroke_width=2,
+        stroke_fill="black",
+    )
 
     return text_image
 
@@ -160,3 +142,30 @@ def get_image_buffer(image, frame_size):
 
     result = buf.astype("uint8").tolist()
     return result
+
+
+def get_buffers(
+    image: Image.Image, buff_count: int, scan_orientation: ScanOrientationType
+) -> list[list[int]]:
+    # Remap our sequential palette colours to display native (missing colour 4)
+    remap = np.array([0, 1, 2, 3, 5, 6])
+    image_matrix = remap[
+        np.array(image, dtype=np.uint8).reshape((image.height, image.width))
+    ]
+
+    if (scan_orientation == "tall" and image.width > image.height) or (
+        scan_orientation == "wide" and image.width < image.height
+    ):
+        image_matrix = np.rot90(image_matrix, -1)
+
+    buffers: list[list[int]] = []
+    for i in range(buff_count):
+        if buff_count == 1:
+            buf = image_matrix.flatten()
+        else:
+            buf = image_matrix[:, i * 600 : (i + 1) * 600]
+            buf = buf.flatten()
+        buf = (((buf[::2] << 4) & 0xF0) | (buf[1::2] & 0x0F)).astype("uint8").tolist()
+        buffers.append(buf)
+
+    return buffers

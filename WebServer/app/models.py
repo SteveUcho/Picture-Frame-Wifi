@@ -8,6 +8,7 @@ sql_url = os.environ["DATABASE_URL"]
 
 engine = create_engine(sql_url)
 
+
 def get_session():
     with Session(engine) as session:
         yield session
@@ -17,6 +18,7 @@ SessionDep = Annotated[Session, Depends(get_session)]
 
 DeviceIdType = Annotated[int, Path(title="The ID of the item to get")]
 OrientationType = Literal["horizontal", "vertical"]
+ScanOrientationType = Literal["wide", "tall"]
 
 
 class SettingInput(BaseModel):
@@ -31,17 +33,19 @@ class SettingInput(BaseModel):
     orientation: OrientationType | None = Field(
         default=None, title="set current orientation of frame"
     )
-    size: int | None = Field(default=None, title="set current size of frame")
 
 
 class Settings(SQLModel, table=True):
     id: int = DbField(default=1, primary_key=True)
     sleepInterval: str
     orientation: str = "horizontal"
-    size: int
+    size: int = DbField(foreign_key="models.size")
     name: str
+
 
 class Models(SQLModel, table=True):
     size: int = DbField(primary_key=True)
     length: int
     width: int
+    icCount: int = DbField(default=1)
+    scanOrientation: str = "wide"

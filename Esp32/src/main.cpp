@@ -1,23 +1,13 @@
+#include <array>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <span>
-#include <array>
 
 #include "EPD_Core.h"
 
-#define uS_TO_S_FACTOR 1000000ULL /* Conversion factor for micro seconds to seconds */
-#define TIME_TO_SLEEP 30          /* Time ESP32 will go to sleep (in seconds) */
+inline constexpr unsigned long long uS_TO_S_FACTOR = 1000000ULL; /* Conversion factor for micro seconds to seconds */
+inline constexpr uint8_t MIN_SLEEP = 30;                         /* Time ESP32 will go to sleep (in seconds) */
 
 RTC_DATA_ATTR int sleepInterval = 0; /* day of the month, used for checking if was powered off, and sets currentCycle */
-
-// Frame size (must match server)
-const size_t FRAME_ROWS = 800;
-const size_t FRAME_COLS = 480;
-const size_t PIXEL_COUNT = FRAME_ROWS * FRAME_COLS;
-const size_t BUFFER_SIZE = (PIXEL_COUNT + 1) / 2; // two pixels per byte
-
-const size_t TIME_HEADER = 4;                           // 4 bytes - Days|Hours|Minutes|Seconds
-const size_t PAYLOAD_TOTAL = TIME_HEADER + BUFFER_SIZE; // total payload size, headers + image data
 
 /*
 Method to print the reason by which ESP32
@@ -59,10 +49,9 @@ void initWiFi()
 
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.print("Connecting to WiFi ..");
     while (WiFi.status() != WL_CONNECTED && count < maxTime)
     {
-        Serial.print('.');
+        Serial.println('.');
         delay(1000);
         count++;
     }
@@ -70,21 +59,38 @@ void initWiFi()
     Serial.println(WiFi.localIP());
 }
 
-bool fetchPackets(std::span<uint8_t> imgBuf)
+void flashLED()
+{
+    digitalWrite(EPD_LED_PIN, HIGH); // Turn the LED ON
+    delay(100);
+    digitalWrite(EPD_LED_PIN, LOW); // Turn the LED OFF
+}
+
+void fetchSleepHeader(const char *url)
 {
     HTTPClient http;
-    http.begin(SERVER_URL);
+
+    Serial.println("Connecting to URL: ");
+    Serial.println(url);
+    http.begin(url);
 
     if (int httpCode = http.GET(); httpCode != HTTP_CODE_OK)
     {
         Serial.printf("HTTP GET failed, code %d\n", httpCode);
         http.end();
-        return false;
+    }
+
+    if (int contentLength = http.getSize(); contentLength <= 0)
+    {
+        Serial.println("Missing Content-Length; cannot use this method");
+        http.end();
+        return;
     }
 
     WiFiClient *stream = http.getStreamPtr();
 
     int newSleepTime = 0;
+    Serial.println("Start, Get Sleep Bytes");
     std::array<uint16_t, 3> toSeconds = {3600, 60, 1};
     for (size_t i = 0; i < 3; i++)
     {
@@ -101,78 +107,85 @@ bool fetchPackets(std::span<uint8_t> imgBuf)
         }
     }
     sleepInterval = newSleepTime;
+    Serial.println("End, Got Sleep Bytes");
+
+    http.end();
+}
+
+void fetchAndLoadPart(const char *url, uint8_t CS_PIN)
+{
+    HTTPClient http;
+
+    Serial.println("Connecting to URL: ");
+    Serial.println(url);
+    http.begin(url);
+
+    if (int httpCode = http.GET(); httpCode != HTTP_CODE_OK)
+    {
+        Serial.printf("HTTP GET failed, code %d\n", httpCode);
+        http.end();
+    }
+
+    int contentLength = http.getSize();
+
+    if (contentLength <= 0)
+    {
+        Serial.println("Missing Content-Length; cannot use this method");
+        http.end();
+        return;
+    }
+
+    WiFiClient *stream = http.getStreamPtr();
+
+    digitalWrite(EPD_DC_PIN, LOW);
+    digitalWrite(CS_PIN, LOW);
+    DEV_SPI_WriteByte(0x10);
+    digitalWrite(EPD_DC_PIN, HIGH);
 
     size_t received = 0;
-    while (http.connected() && received < BUFFER_SIZE)
+    while (http.connected() && received < contentLength)
     {
         if (stream->available())
         {
             int c = stream->read();
             if (c < 0)
                 break;
-            imgBuf[received++] = (uint8_t)c;
+            DEV_SPI_WriteByte((uint8_t)c);
+            received++;
         }
         else
         {
             delay(1);
         }
     }
-
+    digitalWrite(CS_PIN, HIGH);
+    digitalWrite(EPD_DC_PIN, LOW);
     http.end();
-    return received == BUFFER_SIZE;
+
+    Serial.println(received == contentLength ? "Image Buffer Load Successful" : "Image Buffer Load Failed");
 }
 
-void doAllScreenStuff(std::span<const uint8_t> buffer)
+void completeImageLoad(const char *url)
 {
-    Serial.print("Apply Power To Display");
-    if (DEV_Module_Init() != 0)
-    {
-        return;
-    }
+    HTTPClient http;
 
-    Serial.print("Display Image\r\n");
-    EPD_7IN3E_Display(buffer);
-
-    Serial.print("Put Display to Sleep...\r\n");
-    EPD_7IN3E_Sleep();
-    delay(2000); // important, at least 2s
-
-    // close 5V
-    // Serial.print("close 5V, Module enters 0 power consumption ...\r\n");
-    // DEV_Module_Exit();
+    Serial.println("Connecting to URL: ");
+    Serial.println(url);
+    http.begin(url);
+    http.POST(DEVICE_ID);
+    http.end();
 }
 
-void setup()
+void handleSleepLogic()
 {
-    Serial.begin(115200);
-
-    // Print the wakeup reason for ESP32
-    // print_wakeup_reason();
-
-    initWiFi();
-
-    if (static std::array<uint8_t, BUFFER_SIZE> packedBuffer; fetchPackets(packedBuffer)) // only retrieve image data from buffer
-    {
-        Serial.println("Got packed buffer!");
-
-        // init display, display image, display go to sleep
-        doAllScreenStuff(packedBuffer);
-    }
-    else
-    {
-        Serial.println("Failed to fetch packed buffer");
-    }
-
     /*
     Configure the wake up source
     We set our ESP32 to wake up every every interval or sleep long over night
     */
-    int sleepTime = sleepInterval | TIME_TO_SLEEP;
+    int sleepTime = sleepInterval | MIN_SLEEP;
 
     esp_sleep_enable_timer_wakeup(sleepTime * uS_TO_S_FACTOR);
     Serial.println("Setup ESP32 to sleep for " + String(sleepTime) + " Seconds");
-
-    Serial.print("Program Complete!");
 
     /*
     Next we decide what all peripherals to shut down/keep on
@@ -197,6 +210,62 @@ void setup()
     Serial.println("Going to sleep now");
     Serial.flush();
     esp_deep_sleep_start();
+}
+
+void setup()
+{
+#ifdef EPD_E133
+    flashLED();
+#endif
+    // Init GPIO Pins
+    DEV_Module_Init();
+    delay(500);
+
+    // Print the wakeup reason for ESP32
+    print_wakeup_reason();
+
+    Serial.println("EPD Init...");
+    EPD_Init();
+
+    Serial.println("Connecting to WiFi...");
+    initWiFi();
+
+    // get sleep header and load image on the server
+    Serial.println("Get Sleep and load image on Server");
+#ifdef EPD_E133
+    flashLED();
+#endif
+    fetchSleepHeader(SERVER_HOST "/v2/GetFrameHeaders/" DEVICE_ID);
+
+    Serial.println("Display Image");
+#ifdef EPD_E133
+    flashLED();
+#endif
+    fetchAndLoadPart(SERVER_HOST "/v2/GetFrameImage/" DEVICE_ID "/part/0", EPD_CS_PIN);
+#ifdef EPD_E133
+    flashLED();
+    fetchAndLoadPart(SERVER_HOST "/v2/GetFrameImage/" DEVICE_ID "/part/1", EPD_CS2_PIN);
+    flashLED();
+#endif
+    completeImageLoad(SERVER_HOST "/v2/CompleteFrameImage/" DEVICE_ID);
+    WiFi.mode(WIFI_OFF);
+
+#ifdef EPD_E133
+    flashLED();
+#endif
+    // Make the panel actually display image
+    EPD_TurnOnDisplay();
+
+    // close 5V
+    Serial.println("close 5V, Module enters 0 power consumption ...");
+    DEV_Module_Exit();
+
+    Serial.println("Program Complete!");
+
+#ifdef EPD_E133
+    flashLED();
+#endif
+    handleSleepLogic();
     Serial.println("This will never be printed");
 }
 
