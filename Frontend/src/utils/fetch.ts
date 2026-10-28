@@ -28,3 +28,15 @@ export const fetchWithBackend = (url: string, options?: RequestInit) => {
     ...rest
   });
 };
+
+export const postWithBackend = (url: string, options?: RequestInit) => {
+  const { headers, ...rest } = options || {};
+  return fetch(apiBaseUrl + url, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json'
+    },
+    ...rest
+  });
+};

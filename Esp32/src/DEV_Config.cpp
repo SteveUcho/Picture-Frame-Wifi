@@ -31,17 +31,26 @@
 
 void GPIO_Config(void)
 {
+#ifdef EPD_E73
     pinMode(EPD_BUSY_PIN, INPUT);
+#elif EPD_E133
+    pinMode(EPD_BUSY_PIN, INPUT_PULLUP);
+#endif
     pinMode(EPD_RST_PIN, OUTPUT);
     pinMode(EPD_DC_PIN, OUTPUT);
-    pinMode(EPD_PWR_PIN, OUTPUT);
+#ifdef EPD_E133
+    pinMode(EPD_LED_PIN, OUTPUT);
+#endif
 
     pinMode(EPD_SCK_PIN, OUTPUT);
     pinMode(EPD_MOSI_PIN, OUTPUT);
     pinMode(EPD_CS_PIN, OUTPUT);
+#ifdef EPD_E133
     pinMode(EPD_CS2_PIN, OUTPUT);
+#endif
 
-    // digitalWrite(EPD_PWR_PIN , HIGH);
+    digitalWrite(EPD_RST_PIN, HIGH);
+
     digitalWrite(EPD_CS_PIN, HIGH);
 #ifdef EPD_E133
     digitalWrite(EPD_CS2_PIN, HIGH);
@@ -64,7 +73,7 @@ function:	Module Initialize, the BCM2835 library and initialize the pins, SPI pr
 parameter:
 Info:
 ******************************************************************************/
-UBYTE DEV_Module_Init(void)
+void DEV_Module_Init(void)
 {
     // gpio
     GPIO_Config();
@@ -74,9 +83,14 @@ UBYTE DEV_Module_Init(void)
 
     // spi
     SPI.begin();
-    SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
+    SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
+}
 
-    return 0;
+void DEV_Module_Exit(void)
+{
+    digitalWrite(EPD_RST_PIN, LOW);
+    SPI.endTransaction();
+    SPI.end();
 }
 
 void DEV_GPIO_Init(void)
@@ -144,9 +158,4 @@ UBYTE DEV_SPI_ReadByte()
     digitalWrite(EPD_CS_PIN, GPIO_PIN_SET);
     GPIO_Mode(EPD_MOSI_PIN, 1);
     return j;
-}
-
-void DEV_Module_Exit(void)
-{
-    digitalWrite(EPD_PWR_PIN, LOW);
 }

@@ -1,4 +1,5 @@
 import os
+from PIL.Image import Exif
 import requests
 from PIL.ExifTags import TAGS, GPSTAGS
 
@@ -6,8 +7,10 @@ from .utils import get_decimal_from_dms
 
 user_agent = os.environ["USER_AGENT"]
 
-def get_date_text(exif_data):
+def get_date_text(exif_data: Exif) -> str | None:
     datetime = exif_data.get(36867) or exif_data.get(306)
+    if not datetime:
+        return None
     date = datetime.split(" ")[0].split(":")
     date_string = "/".join([date[1], date[2], date[0]])
 

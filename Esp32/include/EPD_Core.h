@@ -38,9 +38,11 @@
 inline constexpr uint16_t EPD_7IN3E_WIDTH = 800;
 inline constexpr uint16_t EPD_7IN3E_HEIGHT = 480;
 
-void EPD_7IN3E_Clear(void);
-void EPD_7IN3E_Display(std::span<const uint8_t> Image);
+void EPD_Init(void);
+void EPD_Clear(void);
+void EPD_Display(std::span<const uint8_t> Image);
 void EPD_7IN3E_DisplayPart(UBYTE *Image, UWORD xstart, UWORD ystart, UWORD image_width, UWORD image_heigh);
-void EPD_7IN3E_Sleep(void);
+void EPD_TurnOnDisplay(void);
+void EPD_SendCommand(UBYTE Command, UBYTE CS_PIN, std::span<const uint8_t> data);
 
 #endif

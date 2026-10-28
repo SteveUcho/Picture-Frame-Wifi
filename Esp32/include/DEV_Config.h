@@ -50,7 +50,7 @@ using UDOUBLE = uint32_t;
 // also connected is pwr to 3.3v
 inline constexpr UBYTE EPD_MOSI_PIN = D10;
 inline constexpr UBYTE EPD_SCK_PIN = D8;
-inline constexpr UBYTE EPD_PWR_PIN = D0;
+inline constexpr UBYTE EPD_LED_PIN = D0;
 
 // GPIO Left Side
 inline constexpr UBYTE EPD_CS_PIN = D3;
@@ -75,7 +75,7 @@ inline constexpr UBYTE GPIO_PIN_RESET = 0;
 #define DEV_Delay_ms(__xms) delay(__xms)
 
 /*------------------------------------------------------------------------------------------------------*/
-UBYTE DEV_Module_Init(void);
+void DEV_Module_Init(void);
 void DEV_GPIO_Init(void);
 void DEV_SPI_Init(void);
 
