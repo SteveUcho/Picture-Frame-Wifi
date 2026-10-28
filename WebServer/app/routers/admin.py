@@ -2,7 +2,7 @@ from sqlmodel import select
 from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException
 
-from ..models import Settings, Models, DeviceIdType, SettingInput, SessionDep
+from ..models import Settings, DeviceIdType, SettingInput, SessionDep
 
 router = APIRouter(
     prefix="/admin",

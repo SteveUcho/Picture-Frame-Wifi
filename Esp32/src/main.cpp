@@ -9,9 +9,6 @@ inline constexpr uint8_t MIN_SLEEP = 30;                         /* Time ESP32 w
 
 RTC_DATA_ATTR int sleepInterval = 0; /* day of the month, used for checking if was powered off, and sets currentCycle */
 
-const size_t PIXEL_COUNT = 800 * 480;
-const size_t BUFFER_SIZE = (PIXEL_COUNT + 1) / 2;
-
 /*
 Method to print the reason by which ESP32
 has been awaken from sleep
