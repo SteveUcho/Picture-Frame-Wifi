@@ -61,9 +61,11 @@ void initWiFi()
 
 void flashLED()
 {
+#ifdef EPD_E133
     digitalWrite(EPD_LED_PIN, HIGH); // Turn the LED ON
     delay(100);
     digitalWrite(EPD_LED_PIN, LOW); // Turn the LED OFF
+#endif
 }
 
 void fetchSleepHeader(const char *url)
@@ -214,9 +216,7 @@ void handleSleepLogic()
 
 void setup()
 {
-#ifdef EPD_E133
     flashLED();
-#endif
     // Init GPIO Pins
     DEV_Module_Init();
     delay(500);
@@ -232,27 +232,21 @@ void setup()
 
     // get sleep header and load image on the server
     Serial.println("Get Sleep and load image on Server");
-#ifdef EPD_E133
     flashLED();
-#endif
     fetchSleepHeader(SERVER_HOST "/v2/GetFrameHeaders/" DEVICE_ID);
 
     Serial.println("Display Image");
-#ifdef EPD_E133
     flashLED();
-#endif
     fetchAndLoadPart(SERVER_HOST "/v2/GetFrameImage/" DEVICE_ID "/part/0", EPD_CS_PIN);
+    flashLED();
 #ifdef EPD_E133
-    flashLED();
     fetchAndLoadPart(SERVER_HOST "/v2/GetFrameImage/" DEVICE_ID "/part/1", EPD_CS2_PIN);
-    flashLED();
 #endif
+    flashLED();
     completeImageLoad(SERVER_HOST "/v2/CompleteFrameImage/" DEVICE_ID);
     WiFi.mode(WIFI_OFF);
 
-#ifdef EPD_E133
     flashLED();
-#endif
     // Make the panel actually display image
     EPD_TurnOnDisplay();
 
@@ -262,9 +256,7 @@ void setup()
 
     Serial.println("Program Complete!");
 
-#ifdef EPD_E133
     flashLED();
-#endif
     handleSleepLogic();
     Serial.println("This will never be printed");
 }
