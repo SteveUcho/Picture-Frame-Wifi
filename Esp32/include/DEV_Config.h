@@ -50,9 +50,10 @@ using UDOUBLE = uint32_t;
 // also connected is pwr to 3.3v
 inline constexpr UBYTE EPD_MOSI_PIN = D10;
 inline constexpr UBYTE EPD_SCK_PIN = D8;
-inline constexpr UBYTE EPD_LED_PIN = D0;
+inline constexpr UBYTE EPD_3v3_REG_PIN = D7;
 
 // GPIO Left Side
+inline constexpr UBYTE EPD_LED_PIN = D0;
 inline constexpr UBYTE EPD_CS_PIN = D3;
 inline constexpr UBYTE EPD_CS2_PIN = D2;
 inline constexpr UBYTE EPD_DC_PIN = D4;

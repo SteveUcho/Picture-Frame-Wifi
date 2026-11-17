@@ -40,6 +40,7 @@ void GPIO_Config(void)
     pinMode(EPD_DC_PIN, OUTPUT);
 #ifdef EPD_E133
     pinMode(EPD_LED_PIN, OUTPUT);
+    pinMode(EPD_3v3_REG_PIN, OUTPUT);
 #endif
 
     pinMode(EPD_SCK_PIN, OUTPUT);
@@ -68,6 +69,29 @@ void GPIO_Mode(UBYTE GPIO_Pin, UBYTE Mode)
         pinMode(GPIO_Pin, OUTPUT);
     }
 }
+
+void enable_3v3_Regulator(void)
+{
+#ifdef EPD_E133
+    // Release GPIO hold if previously enabled
+    gpio_hold_dis((gpio_num_t)EPD_3v3_REG_PIN);
+
+    // Turn panel regulator ON
+    digitalWrite(EPD_3v3_REG_PIN, HIGH);
+#endif
+}
+
+void disable_3v3_Regulator(void)
+{
+#ifdef EPD_E133
+    // Turn panel regulator OFF
+    digitalWrite(EPD_3v3_REG_PIN, LOW);
+
+    // Release GPIO hold if previously enabled
+    gpio_hold_en((gpio_num_t)EPD_3v3_REG_PIN);
+#endif
+}
+
 /******************************************************************************
 function:	Module Initialize, the BCM2835 library and initialize the pins, SPI protocol
 parameter:
@@ -84,10 +108,13 @@ void DEV_Module_Init(void)
     // spi
     SPI.begin();
     SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
+
+    enable_3v3_Regulator();
 }
 
 void DEV_Module_Exit(void)
 {
+    disable_3v3_Regulator();
     digitalWrite(EPD_RST_PIN, LOW);
     SPI.endTransaction();
     SPI.end();
